@@ -2,19 +2,31 @@
 
 #include "resourceManager.h"
 #include "LibMath/Vector.h"
+#include "threadPool.h"
 
+#include <future>
 #include <thread>
+#include <mutex>
 #include <vector>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+
+// add timer for the parser to see how long it takes
+#if 1
+#include <chrono>
+#define TEST_TIME
+#endif
+#if 1
+#define MULTITHREADING
+#endif
 
 struct Vertex
 {
 	Vertex(LibMath::Vector3 pos, LibMath::Vector3 normal, LibMath::Vector2 texCoord);
 
-	LibMath::Vector3 m_position;
-	LibMath::Vector3 m_normal;
-	LibMath::Vector2 m_textureUV;
+	LibMath::Vector3	m_position;
+	LibMath::Vector3	m_normal;
+	LibMath::Vector2	m_textureUV;
 
 	~Vertex() = default;
 };
@@ -22,8 +34,22 @@ struct Vertex
 // define boundaries for a thread to read from
 struct Chunk
 {
-	size_t start;
-	size_t end;
+	size_t	start;
+	size_t	end;
+};
+
+// used for the return in thread
+struct ParseResult
+{
+	std::vector<LibMath::Vector3>	positions;
+	std::vector<LibMath::Vector3>	normals;
+	std::vector<LibMath::Vector2>	texCoords;
+};
+
+struct Something
+{
+	std::vector<Vertex> m_mesh;
+	std::vector<uint32_t> m_indices;
 };
 
 class Model : public IResource
@@ -155,11 +181,18 @@ public :
 		GLuint m_EBO;
 	};
 
-	void parser(std::string const& id);
+	// multithread
+	void parserMulti(std::string const& id, ThreadPool& pool);
 	// creates nbThreads chunks of lines
 	std::vector<Chunk> splitFileByLines(const std::vector<char>& buffer, unsigned int nbThreads);
 
-	void parseChunk(std::vector<char>& buffer, Chunk chunk);
+	void parseChunk(std::vector<char>& buffer, Chunk chunk, std::promise<ParseResult>* promResult);
+
+	void parseFace(std::vector<char>& file, Chunk chunk, ParseResult& result, std::promise<Something>* promResult);
+
+	// singlethread
+	void parserSingle(std::string const& id);
+
 
 	Model(std::string const& id);
 	~Model() = default;

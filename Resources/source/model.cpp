@@ -2,10 +2,10 @@
 #include "LibMath/Vector.h"
 
 // Multithread parser
-void Model::parser(std::string const& id)
+void Model::parserMulti(std::string const& id, ThreadPool& pool)
 {
 	// set the amount of thread used to parse the file
-	int nbThreads = 4;
+	int nbThreads = 1;
 
 	// open the file and set cursor at the end
 	std::ifstream file("../../assets/meshes/" + id, std::ios::binary | std::ios::ate);
@@ -23,21 +23,90 @@ void Model::parser(std::string const& id)
 	file.close();
 
 	std::vector<Chunk> chunks = splitFileByLines(buffer, nbThreads);
-	std::vector<std::thread> threads;
+	std::vector<std::promise<ParseResult>>	promResultMesh(nbThreads);
+	std::vector<std::future<ParseResult>>	futureResultMesh(nbThreads);
 
 	for (int i = 0; i < nbThreads; i++)
 	{
-		std::thread t(parseChunk, buffer, chunks[i]);
-		//threads.emplace_back(parseChunk, buffer, chunks[i]);
+		futureResultMesh[i] = promResultMesh[i].get_future();
+		pool.enqueue(this, &Model::parseChunk, std::ref(buffer), chunks[i], &(promResultMesh[i]));
 	}
 
-	for (std::thread& t : threads)
+	int nbPos = 0;
+	int nbTex = 0;
+	int nbNor = 0;
+
+	std::vector<ParseResult> futures;
+
+	for (auto& f : futureResultMesh)
 	{
-		if (t.joinable())
-		{
-			t.join();
-		}
+		ParseResult result = f.get();
+		futures.push_back(result);
+		// Merge result into your mesh/indices
+		nbPos += result.positions.size();
+		nbTex += result.texCoords.size();
+		nbNor += result.normals.size();
 	}
+
+	ParseResult global_result;
+	global_result.positions.reserve(nbPos);
+	global_result.texCoords.reserve(nbTex);
+	global_result.normals.reserve(nbNor);
+
+	for (auto& f : futures)
+	{
+		// Merge result into your mesh/indices
+		global_result.positions.insert(global_result.positions.end(), f.positions.begin(), f.positions.end());
+		global_result.texCoords.insert(global_result.texCoords.end(), f.texCoords.begin(), f.texCoords.end());
+		global_result.normals.insert(global_result.normals.end(), f.normals.begin(), f.normals.end());
+	}
+
+	chunks = splitFileByLines(buffer, nbThreads);
+
+	std::vector<std::promise<Something>>	promResultIndex(nbThreads);
+	std::vector<std::future<Something>>		futureResultIndex(nbThreads);
+
+	for (int i = 0; i < nbThreads; i++)
+	{
+		futureResultIndex[i] = promResultIndex[i].get_future();
+		pool.enqueue(this, &Model::parseFace, std::ref(buffer), chunks[i], std::ref(global_result), &(promResultIndex[i]));
+	}
+
+	std::vector<Something> futuresSmth;
+
+	int meshSize = 0;
+	int indexSize = 0;
+
+	for (auto& f : futureResultIndex)
+	{
+		Something result = f.get();
+		futuresSmth.push_back(result);
+		// Merge result into your mesh/indices
+		meshSize += result.m_mesh.size();
+		indexSize += result.m_indices.size();
+	}
+
+	m_indices.reserve(indexSize);
+	m_mesh.reserve(meshSize);
+
+	for (auto& f : futuresSmth)
+	{
+		size_t baseIndex = m_mesh.size();  // offset = current vertex count
+
+		// adjust indices from this chunk
+		for (uint32_t& idx : f.m_indices)
+		{
+			idx += static_cast<uint32_t>(baseIndex);
+		}
+
+		// Merge result into your mesh/indices
+		m_indices.insert(m_indices.end(), f.m_indices.begin(), f.m_indices.end());
+		m_mesh.insert(m_mesh.end(), f.m_mesh.begin(), f.m_mesh.end());
+	}
+
+	m_VBO = Buffer(m_mesh);
+	m_EBO = ElementBuffer(m_indices);
+	m_VAO = VertexAttributes(m_VBO.getVBO(), m_EBO.getEBO());
 }
 
 std::vector<Chunk> Model::splitFileByLines(const std::vector<char>& buffer, unsigned int nbThreads)
@@ -70,15 +139,164 @@ std::vector<Chunk> Model::splitFileByLines(const std::vector<char>& buffer, unsi
 
 
 // read a chunk of the file
-void Model::parseChunk(std::vector<char>& buffer, Chunk chunk)
+void Model::parseChunk(std::vector<char>& file, Chunk chunk, std::promise<ParseResult>* promResult)
 {
 	std::vector<LibMath::Vector3> positions, normals;
 	std::vector<LibMath::Vector2> texCoords;
 
-	for (int i = chunk.start; i < chunk.end; i++)
-	{
+	// temp variable to store vertices values
+	LibMath::Vector3 position, normal;
+	LibMath::Vector2 texCoord;
 
+	int index = 0;
+
+	// Map to avoid duplicate vertices: maps a string like "1/1/1" to the final vertex index
+	std::unordered_map<std::string, uint32_t> vertexMap;
+
+	size_t i = chunk.start;
+
+	std::vector<Vertex> mesh;
+	std::vector<uint32_t> indices;
+
+	while (i < chunk.end)
+	{
+		size_t endLine = i;
+		while (file[endLine] != '\n' && endLine < chunk.end)
+		{
+			endLine++;
+		}
+
+		std::string			line(file.begin() + i, file.begin() + endLine);
+		std::stringstream	iss(std::string(file.begin() + i, file.begin() + endLine));
+		std::string			word;
+
+		iss >> word;
+		char* c_word = word.data();
+
+		if (c_word[0] == 'v')
+		{
+			if (c_word[1] == 'n')
+			{
+				iss >> normal.m_x >> normal.m_y >> normal.m_z;
+
+				normals.push_back(normal);
+			}
+			else if (c_word[1] == 't')
+			{
+				iss >> texCoord.m_x >> texCoord.m_y;
+
+				texCoords.push_back(texCoord);
+			}
+			else
+			{
+				iss >> position.m_x >> position.m_y >> position.m_z;
+
+				positions.push_back(position);
+			}
+		}		
+
+		i = 1 + endLine;
 	}
+
+	promResult->set_value({positions, normals, texCoords});
+}
+
+
+// parse the faces
+void Model::parseFace(std::vector<char>& file, Chunk chunk, ParseResult& result, std::promise<Something>* promResult)
+{
+	// Map to avoid duplicate vertices: maps a string like "1/1/1" to the final vertex index
+	std::unordered_map<std::string, uint32_t> vertexMap;
+
+	size_t i = chunk.start;
+
+	std::vector<Vertex> mesh;
+	std::vector<uint32_t> indices;
+
+	// temp variable to store vertices values
+	LibMath::Vector3 position, normal;
+	LibMath::Vector2 texCoord;
+
+	int index = 0;
+
+	while (i < chunk.end)
+	{
+		size_t endLine = i;
+		while (file[endLine] != '\n' && endLine < chunk.end)
+		{
+			endLine++;
+		}
+
+		std::string			line(file.begin() + i, file.begin() + endLine);
+		std::stringstream	iss(std::string(file.begin() + i, file.begin() + endLine));
+		std::string			word;
+
+		iss >> word;
+		char* c_word = word.data();
+
+		if (c_word[0] == 'f')
+		{
+			char del = '/';
+			for (int i = 0; i < 3; ++i)
+			{
+
+				std::string token;
+				iss >> token; // Read one vertex string like "1/1/1"
+
+				if (vertexMap.count(token) == 0)
+				{
+					std::stringstream tokenStream(token);
+					std::string vStr, vtStr, vnStr;
+
+					getline(tokenStream, vStr, del);
+					getline(tokenStream, vtStr, del);
+					getline(tokenStream, vnStr, del);
+
+					if (!vStr.empty())
+					{
+						index = stoi(vStr);
+						index = index < 0 ? static_cast<int>(result.positions.size()) + index : index - 1;
+						if (index >= 0 && index < result.positions.size())
+							position = result.positions[index];
+					}
+
+
+					if (!vtStr.empty())
+					{
+						index = stoi(vtStr);
+						index = index < 0 ? static_cast<int>(result.texCoords.size()) + index : index - 1;
+						if (index >= 0 && index < result.texCoords.size())
+							texCoord = result.texCoords[index];
+					}
+
+
+					if (!vnStr.empty())
+					{
+						index = stoi(vnStr);
+						index = index < 0 ? static_cast<int>(result.normals.size()) + index : index - 1;
+						if (index >= 0 && index < result.normals.size())
+							normal = result.normals[index];
+					}
+
+					mesh.push_back(Vertex(position, normal, texCoord));
+
+					indices.push_back(mesh.size() - 1);
+
+					vertexMap[token] = mesh.size() - 1;
+				}
+				else
+				{
+					// Reuse the cached index for duplicate vertex
+					indices.push_back(vertexMap[token]);
+				}
+			}
+		}
+
+
+		i = 1 + endLine;
+	}
+
+	promResult->set_value({ mesh, indices });
 }
 
 
@@ -86,9 +304,8 @@ void Model::parseChunk(std::vector<char>& buffer, Chunk chunk)
 
 
 
-
 // Old Parser
-Model::Model(std::string const& id)
+void Model::parserSingle(std::string const& id)
 {
 	std::ifstream file("../../assets/meshes/" + id);	// open the file
 	if (!file.is_open()) 
@@ -202,6 +419,29 @@ Model::Model(std::string const& id)
 	m_VBO = Buffer(m_mesh);
 	m_EBO = ElementBuffer(m_indices);
 	m_VAO = VertexAttributes(m_VBO.getVBO(), m_EBO.getEBO());
+}
+
+Model::Model(std::string const& id)
+{
+	ThreadPool pool;
+
+#ifdef TEST_TIME
+	auto start = std::chrono::high_resolution_clock::now();
+#endif
+
+
+#ifdef MULTITHREADING
+	parserMulti(id, pool);
+#else
+	parserSingle(id);
+#endif
+
+
+#ifdef TEST_TIME
+	auto end = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double> elapsed = end - start;
+	printf("Parsed %s in %fs\n", id.c_str(), elapsed.count());
+#endif
 }
 
 void Model::draw()
