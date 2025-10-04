@@ -5,7 +5,7 @@
 void Model::parserMulti(std::string const& id, ThreadPool& pool)
 {
 	// set the amount of thread used to parse the file
-	int nbThreads = 1;
+	int nbThreads = 16;
 
 	// open the file and set cursor at the end
 	std::ifstream file("../../assets/meshes/" + id, std::ios::binary | std::ios::ate);
@@ -60,8 +60,6 @@ void Model::parserMulti(std::string const& id, ThreadPool& pool)
 		global_result.texCoords.insert(global_result.texCoords.end(), f.texCoords.begin(), f.texCoords.end());
 		global_result.normals.insert(global_result.normals.end(), f.normals.begin(), f.normals.end());
 	}
-
-	chunks = splitFileByLines(buffer, nbThreads);
 
 	std::vector<std::promise<Something>>	promResultIndex(nbThreads);
 	std::vector<std::future<Something>>		futureResultIndex(nbThreads);
@@ -138,10 +136,71 @@ std::vector<Chunk> Model::splitFileByLines(const std::vector<char>& buffer, unsi
 }
 
 
+float parseFloat(const char*& ptr, const char* end)
+{
+	float result = 0.0f;
+	bool neg = false;
+	if (ptr < end && *ptr == '-') { neg = true; ++ptr; }
+
+	else if (ptr < end && *ptr == '+') { neg = false; ++ptr; }
+
+	// integer part
+	while (ptr < end && *ptr >= '0' && *ptr <= '9')
+		result = result * 10 + (*ptr++ - '0');
+
+	// fractional part
+	if (ptr < end && *ptr == '.')
+	{
+		++ptr;
+		float frac = 0.0f, div = 1.0f;
+		while (ptr < end && *ptr >= '0' && *ptr <= '9')
+		{
+			frac = frac * 10 + (*ptr++ - '0');
+			div *= 10;
+		}
+		result += frac / div;
+	}
+
+	// Scientific notation
+	if (ptr < end && (*ptr == 'e' || *ptr == 'E')) {
+		++ptr;
+		// optional sign
+		bool expNeg = false;
+		if (ptr < end && (*ptr == '-' || *ptr == '+')) {
+			expNeg = (*ptr == '-');
+			++ptr;
+		}
+
+		int exponent = 0;
+		while (ptr < end && *ptr >= '0' && *ptr <= '9')
+			exponent = exponent * 10 + (*ptr++ - '0');
+
+		if (expNeg)
+			exponent = -exponent;
+
+		result *= std::pow(10.0f, exponent);
+	}
+
+	return neg ? -result : result;
+}
+
+int parseInt(const char* ptr, const char* end)
+{
+	bool neg = false;
+	if (ptr < end && *ptr == '-') { neg = true; ++ptr; }
+
+	else if (ptr < end && *ptr == '+') { neg = false; ++ptr; }
+	int value = 0;
+	while (ptr < end && *ptr >= '0' && *ptr <= '9')
+		value = value * 10 + (*ptr++ - '0');
+	return neg ? -value : value;
+}
+
 // read a chunk of the file
 void Model::parseChunk(std::vector<char>& file, Chunk chunk, std::promise<ParseResult>* promResult)
 {
-	std::vector<LibMath::Vector3> positions, normals;
+	std::vector<LibMath::Vector3> positions;
+	std::vector<LibMath::Vector3> normals;
 	std::vector<LibMath::Vector2> texCoords;
 
 	// temp variable to store vertices values
@@ -166,34 +225,48 @@ void Model::parseChunk(std::vector<char>& file, Chunk chunk, std::promise<ParseR
 			endLine++;
 		}
 
-		std::string			line(file.begin() + i, file.begin() + endLine);
-		std::stringstream	iss(std::string(file.begin() + i, file.begin() + endLine));
-		std::string			word;
+		std::string_view	line(&file[i], endLine - i);
 
-		iss >> word;
-		char* c_word = word.data();
-
-		if (c_word[0] == 'v')
+		// Skip empty lines
+		if (!line.empty())
 		{
-			if (c_word[1] == 'n')
-			{
-				iss >> normal.m_x >> normal.m_y >> normal.m_z;
+			// Check the first character(s)
+			char first = line[0];
+			char second = line.size() > 1 ? line[1] : '\0';
 
+			const char* ptr = line.data();
+			const char* end = ptr + line.size();
+
+			if (first == 'v' && second == ' ') {
+				while (*ptr != ' ') ++ptr; ++ptr;
+				position.m_x = parseFloat(ptr, end);
+				while (*ptr == ' ') ++ptr;
+				position.m_y = parseFloat(ptr, end);
+				while (*ptr == ' ') ++ptr;
+				position.m_z = parseFloat(ptr, end);
+				positions.push_back(position);
+				if (abs(position.m_x) > 5 || abs(position.m_y) > 5 || abs(position.m_z) > 5)
+				{
+					std::cout << "Bad line: " << std::string(line) << "\n";
+				}
+			}
+			else if (first == 'v' && second == 'n') {
+				while (*ptr != ' ') ++ptr; ++ptr;
+				normal.m_x = parseFloat(ptr, end);
+				while (*ptr == ' ') ++ptr;
+				normal.m_y = parseFloat(ptr, end);
+				while (*ptr == ' ') ++ptr;
+				normal.m_z = parseFloat(ptr, end);
 				normals.push_back(normal);
 			}
-			else if (c_word[1] == 't')
-			{
-				iss >> texCoord.m_x >> texCoord.m_y;
-
+			else if (first == 'v' && second == 't') {
+				while (*ptr != ' ') ++ptr; ++ptr;
+				texCoord.m_x = parseFloat(ptr, end);
+				while (*ptr == ' ') ++ptr;
+				texCoord.m_y = parseFloat(ptr, end);
 				texCoords.push_back(texCoord);
 			}
-			else
-			{
-				iss >> position.m_x >> position.m_y >> position.m_z;
-
-				positions.push_back(position);
-			}
-		}		
+		}
 
 		i = 1 + endLine;
 	}
@@ -206,7 +279,7 @@ void Model::parseChunk(std::vector<char>& file, Chunk chunk, std::promise<ParseR
 void Model::parseFace(std::vector<char>& file, Chunk chunk, ParseResult& result, std::promise<Something>* promResult)
 {
 	// Map to avoid duplicate vertices: maps a string like "1/1/1" to the final vertex index
-	std::unordered_map<std::string, uint32_t> vertexMap;
+	std::unordered_map<uint64_t, uint32_t> vertexMap;
 
 	size_t i = chunk.start;
 
@@ -217,8 +290,6 @@ void Model::parseFace(std::vector<char>& file, Chunk chunk, ParseResult& result,
 	LibMath::Vector3 position, normal;
 	LibMath::Vector2 texCoord;
 
-	int index = 0;
-
 	while (i < chunk.end)
 	{
 		size_t endLine = i;
@@ -227,69 +298,57 @@ void Model::parseFace(std::vector<char>& file, Chunk chunk, ParseResult& result,
 			endLine++;
 		}
 
-		std::string			line(file.begin() + i, file.begin() + endLine);
-		std::stringstream	iss(std::string(file.begin() + i, file.begin() + endLine));
-		std::string			word;
+        const char* ptr = &file[i];
+        const char* end = &file[endLine];
 
-		iss >> word;
-		char* c_word = word.data();
+        // Skip empty lines or non-face lines
+        if (ptr < end && *ptr == 'f')
+        {
+            ptr += 2; // skip 'f' and a space
 
-		if (c_word[0] == 'f')
-		{
-			char del = '/';
-			for (int i = 0; i < 3; ++i)
-			{
+            for (int vi = 0; vi < 3; ++vi)
+            {
+                int vIdx = 0, vtIdx = 0, vnIdx = 0;
 
-				std::string token;
-				iss >> token; // Read one vertex string like "1/1/1"
+                // v
+                while (ptr < end && *ptr == ' ') ++ptr;
+                const char* start = ptr;
+                while (ptr < end && *ptr != '/' && *ptr != ' ') ++ptr;
+                if (ptr > start) vIdx = parseInt(start, ptr);
 
-				if (vertexMap.count(token) == 0)
-				{
-					std::stringstream tokenStream(token);
-					std::string vStr, vtStr, vnStr;
+                // vt
+                if (ptr < end && *ptr == '/') { ++ptr; start = ptr; }
+                while (ptr < end && *ptr != '/' && *ptr != ' ') ++ptr;
+                if (ptr > start) vtIdx = parseInt(start, ptr);
 
-					getline(tokenStream, vStr, del);
-					getline(tokenStream, vtStr, del);
-					getline(tokenStream, vnStr, del);
+                // vn
+                if (ptr < end && *ptr == '/') { ++ptr; start = ptr; }
+                while (ptr < end && *ptr != ' ') ++ptr;
+                if (ptr > start) vnIdx = parseInt(start, ptr);
 
-					if (!vStr.empty())
-					{
-						index = stoi(vStr);
-						index = index < 0 ? static_cast<int>(result.positions.size()) + index : index - 1;
-						if (index >= 0 && index < result.positions.size())
-							position = result.positions[index];
-					}
+                // Pack indices into a 64-bit key
+                uint64_t key = ((uint64_t)vIdx << 40) | ((uint64_t)vtIdx << 20) | (uint64_t)vnIdx;
 
+                auto it = vertexMap.find(key);
+                if (it == vertexMap.end())
+                {
+                    vIdx = vIdx < 0 ? static_cast<int>(result.normals.size()) + vIdx : vIdx - 1;;
+                    vtIdx = vtIdx < 0 ? static_cast<int>(result.normals.size()) + vtIdx : vtIdx - 1;;
+                    vnIdx = vnIdx < 0 ? static_cast<int>(result.normals.size()) + vnIdx : vnIdx - 1;;
 
-					if (!vtStr.empty())
-					{
-						index = stoi(vtStr);
-						index = index < 0 ? static_cast<int>(result.texCoords.size()) + index : index - 1;
-						if (index >= 0 && index < result.texCoords.size())
-							texCoord = result.texCoords[index];
-					}
+                    if (vIdx >= 0) position = result.positions[vIdx];
+                    if (vtIdx >= 0) texCoord = result.texCoords[vtIdx];
+                    if (vnIdx >= 0) normal = result.normals[vnIdx];
 
-
-					if (!vnStr.empty())
-					{
-						index = stoi(vnStr);
-						index = index < 0 ? static_cast<int>(result.normals.size()) + index : index - 1;
-						if (index >= 0 && index < result.normals.size())
-							normal = result.normals[index];
-					}
-
-					mesh.push_back(Vertex(position, normal, texCoord));
-
-					indices.push_back(mesh.size() - 1);
-
-					vertexMap[token] = mesh.size() - 1;
-				}
-				else
-				{
-					// Reuse the cached index for duplicate vertex
-					indices.push_back(vertexMap[token]);
-				}
-			}
+                    mesh.push_back(Vertex(position, normal, texCoord));
+                    indices.push_back(mesh.size() - 1);
+                    vertexMap[key] = mesh.size() - 1;
+                }
+                else
+                {
+                    indices.push_back(it->second);
+                }
+            }
 		}
 
 
