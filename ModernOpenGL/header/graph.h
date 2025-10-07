@@ -1,4 +1,5 @@
-#pragma once
+#ifndef GRAPH_H
+#define GRAPH_H
 
 #include <string>
 #include <vector>
@@ -17,17 +18,10 @@ public:
 	public:
 		//object, rotation and texture
 		Mesh				m_data;
-		Texture				m_texture;
+		Texture*			m_texture;
 			
 		//destructor
-		~SceneNode()
-		{
-			//std::cout << "Destroying SceneNode at " << static_cast<const void*>(this) << std::endl;
-			//for (SceneNode* child : m_children)
-			//{
-			//	delete child;
-			//}
-		}
+		~SceneNode() = default;
 
 		//nodes
 		SceneNode*				m_parent = nullptr;
@@ -35,16 +29,16 @@ public:
 
 		//constructor
 		SceneNode(const Mesh& data, SceneNode* parent = nullptr)
-			: m_data(data), m_parent(parent) {}
+			: m_data(data), m_parent(parent), m_texture(nullptr) {}
 
 		SceneNode(SceneNode const&) = delete;				// delete copy cause unique_ptr == non copyable
 		SceneNode& operator=(SceneNode const&) = delete;
 
 		LibMath::Matrix4	getWorldTransorm();
 
-		void				setTransform(const LibMath::Matrix4);
+		void				setTransform(const LibMath::Matrix4&);
 
-		void				setTexture(const Texture&);
+		void				setTexture(Texture*);
 
 		void				drawNodes(Camera const& camera, Shader const& shader);
 	};
@@ -64,5 +58,7 @@ public:
 	//functions
 	SceneNode*	addChild(SceneNode* parent, Mesh data);
 
-	void		startDrawing(Camera const& camera, Shader const& shader);
+	void		startDrawing(Camera const& camera, Shader const& shader) const;
 };
+
+#endif

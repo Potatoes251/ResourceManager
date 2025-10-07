@@ -47,6 +47,17 @@ void Application::update() const
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
+void Application::runMainThreadTasks()
+{
+	std::vector<std::function<void()>> tasks;
+	{
+		std::lock_guard<std::mutex> lock(m_mainMutex);
+		tasks.swap(m_mainThreadTasks);
+	}
+	for (auto& task : tasks)
+		task();
+}
+
 void Application::close() const
 {
 	glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);

@@ -3,7 +3,20 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-Texture::Texture(): m_textureID(0){}
+Texture::Texture(std::string const& textureFile): m_textureID(0)
+{
+	setTexture(textureFile);
+}
+
+
+Texture::~Texture()
+{
+	if (m_textureID != 0)
+	{
+		glDeleteTextures(1, &m_textureID);
+		m_textureID = 0;
+	}
+}
 
 bool Texture::setTexture(std::string const& textureFile)
 {
@@ -33,40 +46,35 @@ bool Texture::setTexture(std::string const& textureFile)
 	std::string position = "../../assets/textures/" + textureFile;
 	unsigned char* data = stbi_load(position.c_str(), &width, &height, &nbChannels, 0);
 
-	//set color type
-	if (data)
-	{
-		GLenum format;
-		if (nbChannels == 1)
-		{
-			format = GL_RED;
-		}
-		else if (nbChannels == 3)
-		{
-			format = GL_RGB;
-		}
-		else if (nbChannels == 4)
-		{
-			format = GL_RGBA;
-		}
-		else
-		{
-			format = GL_RGB;
-		}
-
-		glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-		glGenerateMipmap(GL_TEXTURE_2D);
-
-		stbi_image_free(data);
-
-		return true;
-	}
-
-	else
+	if (!data)
 	{
 		std::cerr << "Failed to load texture: " << position << std::endl;
 		return false;
 	}
+	//set color type
+	GLenum format;
+	if (nbChannels == 1)
+	{
+		format = GL_RED;
+	}
+	else if (nbChannels == 3)
+	{
+		format = GL_RGB;
+	}
+	else if (nbChannels == 4)
+	{
+		format = GL_RGBA;
+	}
+	else
+	{
+		format = GL_RGB;
+	}
+
+	glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+	glGenerateMipmap(GL_TEXTURE_2D);
+
+	stbi_image_free(data);
+	return true;
 }
 
 GLuint Texture::getID() const

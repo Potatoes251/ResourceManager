@@ -41,7 +41,7 @@ LibMath::Matrix4 Mesh::getTransform() const
 	return m_transform;
 }
 
-void Mesh::setTransform(const LibMath::Matrix4 trans)
+void Mesh::setTransform(const LibMath::Matrix4& trans)
 {
 	m_transform = trans;
 }

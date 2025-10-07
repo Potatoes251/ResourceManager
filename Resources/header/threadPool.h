@@ -22,16 +22,17 @@ public:
 			m_tasks.emplace(std::bind(std::forward<Func>(f), std::forward<Args>(args)...));
 		}
 		m_condition.notify_one();
-	};
+	}
 
-	// enqueue a memeber function with param
+	// enqueue a member function with param
 	template <typename Obj, typename MemFunc, typename... Args>
 	void enqueue(Obj* obj, MemFunc func, Args&&... args)
 	{
 		{
 			std::unique_lock<std::mutex> lock(m_queueMutex);
+			// call member function
 			m_tasks.emplace([obj, func, args...]() mutable {
-				(obj->*func)(args...); // call member function
+				(obj->*func)(args...);
 				});
 		}
 		m_condition.notify_one();

@@ -2,7 +2,6 @@
 
 #include "resourceManager.h"
 #include "LibMath/Vector.h"
-#include "threadPool.h"
 
 #include <future>
 #include <thread>
@@ -11,14 +10,12 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-// add timer for the parser to see how long it takes
-#if 1
-#include <chrono>
-#define TEST_TIME
-#endif
 #if 1
 #define MULTITHREADING
 #endif
+
+#define MIN_CHUNK_SIZE_BYTE 250'000
+#define MAX_THREAD 8
 
 struct Vertex
 {
@@ -34,19 +31,20 @@ struct Vertex
 // define boundaries for a thread to read from
 struct Chunk
 {
-	size_t	start;
-	size_t	end;
+	size_t	m_start;
+	size_t	m_end;
 };
 
-// used for the return in thread
-struct ParseResult
+// used for the return of vertices in thread
+struct VerticesResult
 {
-	std::vector<LibMath::Vector3>	positions;
-	std::vector<LibMath::Vector3>	normals;
-	std::vector<LibMath::Vector2>	texCoords;
+	std::vector<LibMath::Vector3>	m_positions;
+	std::vector<LibMath::Vector3>	m_normals;
+	std::vector<LibMath::Vector2>	m_texCoords;
 };
 
-struct Something
+// used for the return of faces in thread
+struct FacesResult
 {
 	std::vector<Vertex> m_mesh;
 	std::vector<uint32_t> m_indices;
@@ -56,7 +54,8 @@ class Model : public IResource
 {
 public :
 
-	class Buffer		// encapsulate the VBO
+	// encapsulate the VBO
+	class Buffer
 	{
 	public :
 		Buffer(std::vector<Vertex> const& mesh);
@@ -91,13 +90,14 @@ public :
 				glDeleteBuffers(1, &m_VBO);
 			}
 		}
-		GLuint getVBO();
+		GLuint getVBO() const;
 
 	private : 
 		GLuint m_VBO;
 	};
 
-	class VertexAttributes	// encapsulate the VAO
+	// encapsulate the VAO
+	class VertexAttributes
 	{
 	public :
 		VertexAttributes(GLuint vbo, GLuint ebo);
@@ -133,13 +133,14 @@ public :
 				glDeleteVertexArrays(1, &m_VAO);
 			}
 		}
-		GLuint getVAO();
+		GLuint getVAO() const;
 
 	private :
 		GLuint m_VAO;
 	};
 
-	class ElementBuffer	// encapsulate the EBO
+	// encapsulate the EBO
+	class ElementBuffer
 	{
 	public:
 		ElementBuffer(std::vector<uint32_t> indices);
@@ -175,36 +176,42 @@ public :
 				glDeleteBuffers(1, &m_EBO);
 			}
 		}
-		GLuint getEBO();
+		GLuint getEBO() const;
 
 	private:
 		GLuint m_EBO;
 	};
 
 	// multithread
-	void parserMulti(std::string const& id, ThreadPool& pool);
-	// creates nbThreads chunks of lines
-	std::vector<Chunk> splitFileByLines(const std::vector<char>& buffer, unsigned int nbThreads);
+	void	parserMulti(std::string const& id, ThreadPool& pool);
 
-	void parseChunk(std::vector<char>& buffer, Chunk chunk, std::promise<ParseResult>* promResult);
+	// creates nbChunk chunks of lines
+	std::vector<Chunk>	splitFileByLines(const std::vector<char>& buffer, size_t nbChunk);
 
-	void parseFace(std::vector<char>& file, Chunk chunk, ParseResult& result, std::promise<Something>* promResult);
+	// parse vertices in a chunk
+	void	parseChunk(std::vector<char>& buffer, Chunk chunk, std::promise<VerticesResult>* promResult);
+
+	// parse the faces of a file
+	void	parseFace(std::vector<char>& file, Chunk chunk, VerticesResult& result, std::promise<FacesResult>* promResult);
+
 
 	// singlethread
-	void parserSingle(std::string const& id);
+	void	parserSingle(std::string const& id);
 
+	void	uploadToGPU();
 
+	Model(std::string const& id, ThreadPool& pool);
 	Model(std::string const& id);
 	~Model() = default;
 
 	void draw();
 
 private :
+	
+	Buffer					m_VBO;
+	VertexAttributes		m_VAO;
+	ElementBuffer			m_EBO;
 
-	Buffer m_VBO;
-	VertexAttributes m_VAO;
-	ElementBuffer m_EBO;
-
-	std::vector<Vertex> m_mesh;
-	std::vector<uint32_t> m_indices;
+	std::vector<Vertex>		m_mesh;
+	std::vector<uint32_t>	m_indices;
 };

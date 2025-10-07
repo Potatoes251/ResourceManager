@@ -9,16 +9,9 @@ class Texture : public IResource
 {
 public:
 	//constructor and destructor
-	Texture();
+	Texture(std::string const& textureFile);
 
-	~Texture()
-	{
-		if (m_textureID != 0) 
-		{ 
-			glDeleteTextures(1, &m_textureID); 
-			m_textureID = 0;
-		}
-	}
+	~Texture();
 
 	//functions
 	bool	setTexture(std::string const& textureFile);

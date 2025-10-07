@@ -19,7 +19,7 @@ public :
 
 	LibMath::Matrix4	getTransform() const;
 
-	void				setTransform(const LibMath::Matrix4);
+	void				setTransform(const LibMath::Matrix4&);
 
 private :
 	Model* m_model;

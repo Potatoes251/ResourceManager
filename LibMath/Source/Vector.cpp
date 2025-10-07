@@ -357,7 +357,7 @@ bool LibMath::Vector3::isShorterThan(Vector3 const& other) const
 
 bool LibMath::Vector3::isUnitVector() const
 {
-	return magnitudeSquared() == 1;
+	return std::fabs(magnitudeSquared() - 1) < 1e-6;
 }
 
 float LibMath::Vector3::magnitude() const
