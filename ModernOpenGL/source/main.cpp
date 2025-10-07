@@ -9,7 +9,7 @@
 
 #include "memoryLeak.h"
 
-void initShader(Shader& shader)
+void	initShader(Shader& shader)
 {
 	shader.setVertexShader("vertexShader.glsl");
 	shader.setFragmentShader("Fragment.glsl");
@@ -17,7 +17,7 @@ void initShader(Shader& shader)
 	shader.use();
 }
 
-void onMesh1Loaded(Model* model, Graph* graph, ResourceManager& rm, Application* app)
+void	onMesh1Loaded(Model* model, Graph* graph, ResourceManager& rm, Application* app)
 {
 	app->postToMain([=, &rm]() {
 		model->uploadToGPU();
@@ -34,13 +34,13 @@ void onMesh1Loaded(Model* model, Graph* graph, ResourceManager& rm, Application*
 		});
 }
 
-void loadMesh1(ResourceManager& rm, Graph* graph, Application* app)
+void	loadMesh1(ResourceManager& rm, Graph* graph, Application* app)
 {
 	std::string file = "diablo3_pose/diablo3_pose.obj";
 	rm.createAsync<Model>(file, onMesh1Loaded, graph, std::ref(rm), app);
 }
 
-void onMesh2Loaded(Model* model, Graph* graph, ResourceManager& rm, Application* app)
+void	onMesh2Loaded(Model* model, Graph* graph, ResourceManager& rm, Application* app)
 {
 	app->postToMain([=, &rm]() {
 		model->uploadToGPU();
@@ -57,13 +57,13 @@ void onMesh2Loaded(Model* model, Graph* graph, ResourceManager& rm, Application*
 		});
 }
 
-void loadMesh2(ResourceManager& rm, Graph* graph, Application* app)
+void	loadMesh2(ResourceManager& rm, Graph* graph, Application* app)
 {
 	std::string file = "bunny.obj";
 	rm.createAsync<Model>(file, onMesh2Loaded, graph, std::ref(rm), app);
 }
 
-void onMesh3Loaded(Model* model, Graph* graph, ResourceManager& rm, Application* app)
+void	onMesh3Loaded(Model* model, Graph* graph, ResourceManager& rm, Application* app)
 {
 	app->postToMain([=, &rm]() {
 		model->uploadToGPU();
@@ -76,17 +76,17 @@ void onMesh3Loaded(Model* model, Graph* graph, ResourceManager& rm, Application*
 				LibMath::Vector3(2.f, 2.f, 2.f)));
 
 		Graph::SceneNode* node = graph->addChild(nullptr, mesh);
-		node->setTexture(rm.Get<Texture>("container.jpg"));
+		node->setTexture(rm.Get<Texture>("Potatoes.jpg"));
 		});
 }
 
-void loadMesh3(ResourceManager& rm, Graph* graph, Application* app)
+void	loadMesh3(ResourceManager& rm, Graph* graph, Application* app)
 {
 	std::string file = "dragon.obj";
 	rm.createAsync<Model>(file, onMesh3Loaded, graph, std::ref(rm), app);
 }
 
-void initLights(Shader& shader, Camera& camera)
+void	initLights(Shader& shader, Camera& camera)
 {
 	//Light
 	Lights lights;
@@ -104,7 +104,7 @@ void initLights(Shader& shader, Camera& camera)
 	lights.setUniform(shader, camera);
 }
 
-void initResources(Shader& shader, Camera& camera, ResourceManager& rm)
+void	initResources(Shader& shader, Camera& camera, ResourceManager& rm)
 {
 	rm.Create<Texture>("awesomeface.png");
 	rm.Create<Texture>("container.jpg");
@@ -114,7 +114,7 @@ void initResources(Shader& shader, Camera& camera, ResourceManager& rm)
 	initLights(shader, camera);
 }
 
-void processInput(GLFWwindow* window, int key, int scancode, int action, int mods)
+void	processInput(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	AppContext* ctx = static_cast<AppContext*>(glfwGetWindowUserPointer(window));
 	if (!ctx->mesh1Loaded && key == GLFW_KEY_1)
@@ -134,7 +134,7 @@ void processInput(GLFWwindow* window, int key, int scancode, int action, int mod
 	}
 }
 
-bool mainLoop(Application& app, Camera& camera, Graph& graph, Shader& shader)
+bool	mainLoop(Application& app, Camera& camera, Graph& graph, Shader& shader)
 {
 	while (!glfwWindowShouldClose(app.getWindow()))
 	{
@@ -150,7 +150,7 @@ bool mainLoop(Application& app, Camera& camera, Graph& graph, Shader& shader)
 		}
 		else if (glfwGetKey(app.getWindow(), GLFW_KEY_T) == GLFW_PRESS)
 		{
-			printf("switching\n");
+			return true;
 		}
 
 		graph.startDrawing(camera, shader);
@@ -161,7 +161,7 @@ bool mainLoop(Application& app, Camera& camera, Graph& graph, Shader& shader)
 	return false;
 }
 
-int main()
+int		main()
 {
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 	_CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG);

@@ -1,145 +1,9 @@
 #include "model.h"
 #include "LibMath/Vector.h"
 
-// Multithread parser
-void Model::parserMulti(std::string const& id, ThreadPool& pool)
-{
-	// open the file and set cursor at the end
-	std::ifstream file("../../assets/meshes/" + id, std::ios::binary | std::ios::ate);
-	if (!file.is_open())
-	{
-		// handle file not found
-		std::cerr << "Failed to open file" << std::endl;
-		return;
-	}
-	size_t fileSize = file.tellg();
-	file.seekg(0);
-
-	std::vector<char> buffer(fileSize);
-	file.read(buffer.data(), fileSize);
-	file.close();
-
-	if (buffer[buffer.size() - 1] != '\n')
-	{
-		buffer.push_back('\n');
-	}
-
-	size_t nbChunk = buffer.size() / MIN_CHUNK_SIZE_BYTE;
-	nbChunk = std::max(std::min((int)nbChunk, MAX_THREAD), 1);
-
-	printf("Spliting %s into %zu chunks\n", id.c_str(), nbChunk);
-
-	std::vector<Chunk> chunks = splitFileByLines(buffer, nbChunk);
-	std::vector<std::promise<VerticesResult>>	promResultMesh(nbChunk);
-	std::vector<std::future<VerticesResult>>	futureResultMesh(nbChunk);
-
-	for (int i = 0; i < nbChunk; i++)
-	{
-		futureResultMesh[i] = promResultMesh[i].get_future();
-		pool.enqueue(this, &Model::parseChunk, std::ref(buffer), chunks[i], &(promResultMesh[i]));
-	}
-
-	int nbPos = 0;
-	int nbTex = 0;
-	int nbNor = 0;
-
-	std::vector<VerticesResult> futures;
-
-	for (auto& f : futureResultMesh)
-	{
-		VerticesResult result = f.get();
-		futures.push_back(result);
-		// Merge result into your mesh/indices
-		nbPos += result.m_positions.size();
-		nbTex += result.m_texCoords.size();
-		nbNor += result.m_normals.size();
-	}
-
-	VerticesResult global_result;
-	global_result.m_positions.reserve(nbPos);
-	global_result.m_texCoords.reserve(nbTex);
-	global_result.m_normals.reserve(nbNor);
-
-	for (auto& f : futures)
-	{
-		// Merge result into your mesh/indices
-		global_result.m_positions.insert(global_result.m_positions.end(), f.m_positions.begin(), f.m_positions.end());
-		global_result.m_texCoords.insert(global_result.m_texCoords.end(), f.m_texCoords.begin(), f.m_texCoords.end());
-		global_result.m_normals.insert(global_result.m_normals.end(), f.m_normals.begin(), f.m_normals.end());
-	}
-
-	std::vector<std::promise<FacesResult>>	promResultIndex(nbChunk);
-	std::vector<std::future<FacesResult>>		futureResultIndex(nbChunk);
-
-	for (int i = 0; i < nbChunk; i++)
-	{
-		futureResultIndex[i] = promResultIndex[i].get_future();
-		pool.enqueue(this, &Model::parseFace, std::ref(buffer), chunks[i], std::ref(global_result), &(promResultIndex[i]));
-	}
-
-	std::vector<FacesResult> futuresSmth;
-
-	int meshSize = 0;
-	int indexSize = 0;
-
-	for (auto& f : futureResultIndex)
-	{
-		FacesResult result = f.get();
-		futuresSmth.push_back(result);
-		// Merge result into your mesh/indices
-		meshSize += result.m_mesh.size();
-		indexSize += result.m_indices.size();
-	}
-
-	m_indices.reserve(indexSize);
-	m_mesh.reserve(meshSize);
-
-	for (auto& f : futuresSmth)
-	{
-		size_t baseIndex = m_mesh.size();  // offset = current vertex count
-
-		// adjust indices from this chunk
-		for (uint32_t& idx : f.m_indices)
-		{
-			idx += static_cast<uint32_t>(baseIndex);
-		}
-
-		// Merge result into your mesh/indices
-		m_indices.insert(m_indices.end(), f.m_indices.begin(), f.m_indices.end());
-		m_mesh.insert(m_mesh.end(), f.m_mesh.begin(), f.m_mesh.end());
-	}
-}
-
-std::vector<Chunk> Model::splitFileByLines(const std::vector<char>& buffer, size_t nbChunk)
-{
-	size_t chunkSize = buffer.size() / nbChunk;
-	std::vector<Chunk> chunks;
-
-	size_t current = 0;
-
-	for (int i = 0; i < nbChunk - 1; i++)
-	{
-		size_t start = current;
-
-		size_t end = start + chunkSize;
-
-		while (end < buffer.size() && buffer[end] != '\n')
-		{
-			++end;
-		}
-
-		chunks.push_back({ start,end });
-
-		current = end + 1;
-	}
-
-	chunks.push_back({ current,buffer.size() });
-
-	return chunks;
-}
 
 
-float parseFloat(const char*& ptr, const char* end)
+float	parseFloat(const char*& ptr, const char* end)
 {
 	float result = 0.0f;
 	bool neg = false;
@@ -197,7 +61,7 @@ float parseFloat(const char*& ptr, const char* end)
 	return neg ? -result : result;
 }
 
-int parseInt(const char* ptr, const char* end)
+int		parseInt(const char* ptr, const char* end)
 {
 	bool neg = false;
 	if (ptr < end && *ptr == '-') { neg = true; ++ptr; }
@@ -209,26 +73,186 @@ int parseInt(const char* ptr, const char* end)
 	return neg ? -value : value;
 }
 
-// read a chunk of the file
-void Model::parseChunk(std::vector<char>& file, Chunk chunk, std::promise<VerticesResult>* promResult)
+LibMath::Vector3	parseVec3(const char* ptr, const char* end)
 {
-	std::vector<LibMath::Vector3> positions;
-	std::vector<LibMath::Vector3> normals;
+	LibMath::Vector3 position;
+	while (*ptr != ' ')
+	{
+		++ptr;
+	}
+	++ptr;
+	position.m_x = parseFloat(ptr, end);
+	while (*ptr == ' ')
+	{
+		++ptr;
+	}
+	position.m_y = parseFloat(ptr, end);
+	while (*ptr == ' ')
+	{
+		++ptr;
+	}
+	position.m_z = parseFloat(ptr, end);
+	return position;
+}
+
+LibMath::Vector2	parseVec2(const char* ptr, const char* end)
+{
+	LibMath::Vector2 position;
+	while (*ptr != ' ')
+	{
+		++ptr;
+	}
+	++ptr;
+	position.m_x = parseFloat(ptr, end);
+	while (*ptr == ' ')
+	{
+		++ptr;
+	}
+	position.m_y = parseFloat(ptr, end);
+	return position;
+}
+
+
+void Model::parserMultithread(std::string const& id, ThreadPool& pool)
+{
+	// open the file and set cursor at the end
+	std::ifstream file("../../assets/meshes/" + id, std::ios::binary | std::ios::ate);
+	if (!file.is_open())
+	{
+		// handle file not found
+		std::cerr << "Failed to open file" << std::endl;
+		return;
+	}
+	size_t fileSize = file.tellg();
+	file.seekg(0);
+
+	std::vector<char> buffer(fileSize);
+	file.read(buffer.data(), fileSize);
+	file.close();
+
+	if (buffer[buffer.size() - 1] != '\n')
+	{
+		buffer.push_back('\n');
+	}
+
+	size_t nbChunk = buffer.size() / MIN_CHUNK_SIZE_BYTE;
+	nbChunk = std::max(std::min((int)nbChunk, MAX_THREAD), 1);
+
+	printf("Spliting %s into %zu chunks\n", id.c_str(), nbChunk);
+
+	std::vector<Chunk> chunks = splitFileByLines(buffer, nbChunk);
+	std::vector<std::promise<VerticesResult>>	promResultMesh(nbChunk);
+	std::vector<std::future<VerticesResult>>	futureResultMesh(nbChunk);
+
+	for (int i = 0; i < nbChunk; i++)
+	{
+		futureResultMesh[i] = promResultMesh[i].get_future();
+		pool.enqueue(this, &Model::parseChunkVertices, std::ref(buffer), chunks[i], &(promResultMesh[i]));
+	}
+
+	int nbPos = 0;
+	int nbTex = 0;
+	int nbNor = 0;
+
+	std::vector<VerticesResult> futures;
+
+	for (auto& f : futureResultMesh)
+	{
+		VerticesResult result = f.get();
+		futures.push_back(result);
+		// Merge result into your mesh/indices
+		nbPos += result.m_positions.size();
+		nbTex += result.m_texCoords.size();
+		nbNor += result.m_normals.size();
+	}
+
+	VerticesResult global_result;
+	global_result.m_positions.reserve(nbPos);
+	global_result.m_texCoords.reserve(nbTex);
+	global_result.m_normals.reserve(nbNor);
+
+	for (auto& f : futures)
+	{
+		// Merge result into your mesh/indices
+		global_result.m_positions.insert(global_result.m_positions.end(), f.m_positions.begin(), f.m_positions.end());
+		global_result.m_texCoords.insert(global_result.m_texCoords.end(), f.m_texCoords.begin(), f.m_texCoords.end());
+		global_result.m_normals.insert(global_result.m_normals.end(), f.m_normals.begin(), f.m_normals.end());
+	}
+
+	std::vector<std::promise<FacesResult>>	promResultIndex(nbChunk);
+	std::vector<std::future<FacesResult>>		futureResultIndex(nbChunk);
+
+	for (int i = 0; i < nbChunk; i++)
+	{
+		futureResultIndex[i] = promResultIndex[i].get_future();
+		pool.enqueue(this, &Model::parseChunkFaces, std::ref(buffer), chunks[i], std::ref(global_result), &(promResultIndex[i]));
+	}
+
+	std::vector<FacesResult> futuresResult;
+
+	int meshSize = 0;
+	int indexSize = 0;
+
+	for (auto& f : futureResultIndex)
+	{
+		FacesResult result = f.get();
+		futuresResult.push_back(result);
+		// Merge result into your mesh/indices
+		meshSize += result.m_mesh.size();
+		indexSize += result.m_indices.size();
+	}
+
+	m_indices.reserve(indexSize);
+	m_mesh.reserve(meshSize);
+
+	for (auto& f : futuresResult)
+	{
+		size_t baseIndex = m_mesh.size();  // offset = current vertex count
+
+		// adjust indices from this chunk
+		for (uint32_t& idx : f.m_indices)
+		{
+			idx += static_cast<uint32_t>(baseIndex);
+		}
+
+		// Merge result into your mesh/indices
+		m_indices.insert(m_indices.end(), f.m_indices.begin(), f.m_indices.end());
+		m_mesh.insert(m_mesh.end(), f.m_mesh.begin(), f.m_mesh.end());
+	}
+}
+
+std::vector<Chunk> Model::splitFileByLines(const std::vector<char>& buffer, size_t nbChunk)
+{
+	size_t chunkSize = buffer.size() / nbChunk;
+	std::vector<Chunk> chunks;
+
+	size_t current = 0;
+
+	for (int i = 0; i < nbChunk - 1; i++)
+	{
+		size_t start = current;
+
+		size_t end = start + chunkSize;
+
+		while (end < buffer.size() && buffer[end] != '\n')
+			++end;
+
+		chunks.push_back({ start,end });
+
+		current = end + 1;
+	}
+
+	chunks.push_back({ current,buffer.size() });
+
+	return chunks;
+}
+
+void	Model::parseChunkVertices(std::vector<char>& file, Chunk chunk, std::promise<VerticesResult>* promResult)
+{
+	std::vector<LibMath::Vector3> positions, normals;
 	std::vector<LibMath::Vector2> texCoords;
 
-	// temp variable to store vertices values
-	LibMath::Vector3 position, normal;
-	LibMath::Vector2 texCoord;
-
-	int index = 0;
-
-	// Map to avoid duplicate vertices: maps a string like "1/1/1" to the final vertex index
-	std::unordered_map<std::string, uint32_t> vertexMap;
-
-	size_t i = chunk.m_start;
-
-	std::vector<Vertex> mesh;
-	std::vector<uint32_t> indices;
+	size_t	i = chunk.m_start;
 
 	while (i < chunk.m_end)
 	{
@@ -241,54 +265,36 @@ void Model::parseChunk(std::vector<char>& file, Chunk chunk, std::promise<Vertic
 		std::string_view	line(&file[i], endLine - i);
 
 		// Skip empty lines
-		if (!line.empty())
+		if (line.empty())
 		{
-			// Check the first character(s)
-			char first = line[0];
-			char second = line.size() > 1 ? line[1] : '\0';
-
-			const char* ptr = line.data();
-			const char* end = ptr + line.size();
-
-			if (first == 'v' && second == ' ') 
-			{
-				while (*ptr != ' ') ++ptr; ++ptr;
-				position.m_x = parseFloat(ptr, end);
-				while (*ptr == ' ') ++ptr;
-				position.m_y = parseFloat(ptr, end);
-				while (*ptr == ' ') ++ptr;
-				position.m_z = parseFloat(ptr, end);
-				positions.push_back(position);
-			}
-			else if (first == 'v' && second == 'n') 
-			{
-				while (*ptr != ' ') ++ptr; ++ptr;
-				normal.m_x = parseFloat(ptr, end);
-				while (*ptr == ' ') ++ptr;
-				normal.m_y = parseFloat(ptr, end);
-				while (*ptr == ' ') ++ptr;
-				normal.m_z = parseFloat(ptr, end);
-				normals.push_back(normal);
-			}
-			else if (first == 'v' && second == 't') 
-			{
-				while (*ptr != ' ') ++ptr; ++ptr;
-				texCoord.m_x = parseFloat(ptr, end);
-				while (*ptr == ' ') ++ptr;
-				texCoord.m_y = parseFloat(ptr, end);
-				texCoords.push_back(texCoord);
-			}
+			i = ++endLine;
+			continue;
 		}
+		// Check the first character(s)
+		char	first = line[0];
+		char	second = line.size() > 1 ? line[1] : '\0';
 
-		i = 1 + endLine;
+		const char*		ptr = line.data();
+		const char*		end = ptr + line.size();
+
+		if (first == 'v' && second == ' ') 
+		{
+			positions.push_back(parseVec3(ptr, end));
+		}
+		else if (first == 'v' && second == 'n') 
+		{
+			normals.push_back(parseVec3(ptr, end));
+		}
+		else if (first == 'v' && second == 't') 
+		{
+			texCoords.push_back(parseVec2(ptr, end));
+		}
+		i = ++endLine;
 	}
-
 	promResult->set_value({positions, normals, texCoords});
 }
 
-
-// parse the faces
-void Model::parseFace(std::vector<char>& file, Chunk chunk, VerticesResult& result, std::promise<FacesResult>* promResult)
+void	Model::parseChunkFaces(std::vector<char>& file, Chunk chunk, VerticesResult& result, std::promise<FacesResult>* promResult)
 {
 	// Map to avoid duplicate vertices: maps a string like "1/1/1" to the final vertex index
 	std::unordered_map<uint64_t, uint32_t> vertexMap;
@@ -314,83 +320,89 @@ void Model::parseFace(std::vector<char>& file, Chunk chunk, VerticesResult& resu
         const char* end = &file[endLine];
 
         // Skip empty lines or non-face lines
-        if (ptr < end && *ptr == 'f')
-        {
-            ptr += 2; // skip 'f' and a space
-
-            for (int vi = 0; vi < 3; ++vi)
-            {
-                int vIdx = 0, vtIdx = 0, vnIdx = 0;
-
-                // v
-                while (ptr < end && *ptr == ' ') ++ptr;
-                const char* start = ptr;
-                while (ptr < end && *ptr != '/' && *ptr != ' ')
-				{
-					++ptr;
-				}
-                if (ptr > start) vIdx = parseInt(start, ptr);
-
-                // vt
-                if (ptr < end && *ptr == '/') 
-				{
-					++ptr; 
-					start = ptr;
-				}
-                while (ptr < end && *ptr != '/' && *ptr != ' ') 
-				{
-					++ptr;
-				}
-                if (ptr > start) vtIdx = parseInt(start, ptr);
-
-                // vn
-				if (ptr < end && *ptr == '/')
-				{
-					++ptr;
-					start = ptr;
-				}
-                while (ptr < end && *ptr != ' ') 
-				{
-					++ptr;
-				}
-                if (ptr > start) vnIdx = parseInt(start, ptr);
-
-				// Pack indices into a 64-bit key
-                //uint64_t key = ((uint64_t)vIdx << 40) | ((uint64_t)vtIdx << 20) | (uint64_t)vnIdx;
-
-                //auto it = vertexMap.find(key);
-                //if (it == vertexMap.end())
-                {
-                    vIdx = vIdx < 0 ? static_cast<int>(result.m_positions.size()) + vIdx : vIdx - 1;;
-                    vtIdx = vtIdx < 0 ? static_cast<int>(result.m_texCoords.size()) + vtIdx : vtIdx - 1;;
-                    vnIdx = vnIdx < 0 ? static_cast<int>(result.m_normals.size()) + vnIdx : vnIdx - 1;;
-
-                    if (vIdx >= 0) position = result.m_positions[vIdx];
-                    if (vtIdx >= 0) texCoord = result.m_texCoords[vtIdx];
-                    if (vnIdx >= 0) normal = result.m_normals[vnIdx];
-
-                    mesh.push_back(Vertex(position, normal, texCoord));
-                    indices.push_back(mesh.size() - 1);
-                    //vertexMap[key] = mesh.size() - 1;
-                }
-                //else
-                //{
-                //    indices.push_back(it->second);
-                //}
-            }
+		if (ptr >= end || *ptr != 'f')
+		{
+			i = ++endLine;
+			continue;
 		}
 
+        ptr += 2; // skip 'f' and a space
 
-		i = 1 + endLine;
+        for (int vi = 0; vi < 3; ++vi)
+        {
+			int vIdx = 0;
+			int vtIdx = 0;
+			int vnIdx = 0;
+
+			// v
+			while (ptr < end && *ptr == ' ')
+			{
+				++ptr;
+			}
+			const char* start = ptr;
+			while (ptr < end && *ptr != '/' && *ptr != ' ')
+			{
+				++ptr;
+			}
+			if (ptr > start) vIdx = parseInt(start, ptr);
+
+			// vt
+			if (ptr < end && *ptr == '/')
+			{
+				++ptr;
+			}
+			start = ptr;
+			while (ptr < end && *ptr != '/' && *ptr != ' ')
+			{
+				++ptr;
+			}
+			if (ptr > start)
+				vtIdx = parseInt(start, ptr);
+
+			// vn
+			if (ptr < end && *ptr == '/')
+			{
+				++ptr;
+			}
+			start = ptr;
+			while (ptr < end && *ptr != ' ')
+			{
+				++ptr;
+			}
+			if (ptr > start)
+				vnIdx = parseInt(start, ptr);
+
+			// Pack indices into a 64-bit key
+            uint64_t key = ((uint64_t)vIdx << 40) | ((uint64_t)vtIdx << 20) | (uint64_t)vnIdx;
+
+            auto it = vertexMap.find(key);
+            if (it == vertexMap.end())
+            {
+                vIdx	= vIdx < 0 ?  (int)result.m_positions.size() + vIdx : vIdx - 1;
+                vtIdx	= vtIdx < 0 ? (int)result.m_texCoords.size() + vtIdx : vtIdx - 1;
+                vnIdx	= vnIdx < 0 ? (int)result.m_normals.size() + vnIdx : vnIdx - 1;
+
+                if (vIdx >= 0)	position	= result.m_positions[vIdx];
+                if (vtIdx >= 0) texCoord	= result.m_texCoords[vtIdx];
+                if (vnIdx >= 0) normal		= result.m_normals[vnIdx];
+
+                mesh.push_back(Vertex(position, normal, texCoord));
+                indices.push_back(mesh.size() - 1);
+                vertexMap[key] = mesh.size() - 1;
+            }
+            else
+            {
+                indices.push_back(it->second);
+            }
+        }
+		
+		i = ++endLine;
 	}
-
 	promResult->set_value({ mesh, indices });
 }
 
-
-
 // Old Parser
-void Model::parserSingle(std::string const& id)
+void	Model::parserSinglethread(std::string const& id)
 {
 	std::ifstream file("../../assets/meshes/" + id);	// open the file
 	if (!file.is_open()) 
@@ -474,7 +486,7 @@ void Model::parserSingle(std::string const& id)
 
 					if (!vStr.empty())
 					{
-						index = stoi(vStr);
+						index = parseInt(vStr.data(), vStr._Unchecked_end());
 						index = index < 0 ? static_cast<int>(positions.size()) + index : index - 1;
 						if (index >= 0 && index < positions.size())
 							position = positions[index];
@@ -483,7 +495,7 @@ void Model::parserSingle(std::string const& id)
 
 					if (!vtStr.empty())
 					{
-						index = stoi(vtStr);
+						index = parseInt(vtStr.data(), vtStr._Unchecked_end());
 						index = index < 0 ? static_cast<int>(texCoords.size()) + index : index - 1;
 						if (index >= 0 && index < texCoords.size())
 							texCoord = texCoords[index];
@@ -492,7 +504,7 @@ void Model::parserSingle(std::string const& id)
 
 					if (!vnStr.empty())
 					{
-						index = stoi(vnStr);
+						index = parseInt(vnStr.data(), vnStr._Unchecked_end());
 						index = index < 0 ? static_cast<int>(normals.size()) + index : index - 1;
 						if (index >= 0 && index < normals.size())
 							normal = normals[index];
@@ -517,7 +529,9 @@ void Model::parserSingle(std::string const& id)
 	file.close();
 }
 
-void Model::uploadToGPU()
+
+
+void	Model::uploadToGPU()
 {
 	m_VBO = Buffer(m_mesh);
 	m_EBO = ElementBuffer(m_indices);
@@ -527,19 +541,19 @@ void Model::uploadToGPU()
 
 Model::Model(std::string const& id, ThreadPool& pool)
 {
-	parserMulti(id, pool);
+	parserMultithread(id, pool);
 }
 
 Model::Model(std::string const& id)
 {
-	parserSingle(id);
-
+	parserSinglethread(id);
 }
 
 void Model::draw()
 {
 	glPolygonMode(GL_FRONT, GL_FILL);
 	glBindVertexArray(m_VAO.getVAO());
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_EBO.getEBO());
 	glDrawElements(GL_TRIANGLES, m_indices.size(), GL_UNSIGNED_INT, 0);
 }
 

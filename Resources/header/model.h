@@ -10,12 +10,8 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-#if 1
-#define MULTITHREADING
-#endif
-
 #define MIN_CHUNK_SIZE_BYTE 250'000
-#define MAX_THREAD 8
+#define MAX_THREAD 1
 
 struct Vertex
 {
@@ -49,6 +45,11 @@ struct FacesResult
 	std::vector<Vertex> m_mesh;
 	std::vector<uint32_t> m_indices;
 };
+
+float				parseFloat(const char*& ptr, const char* end);
+int					parseInt(const char* ptr, const char* end);
+LibMath::Vector3	parseVec3(const char* ptr, const char* end);
+LibMath::Vector2	parseVec2(const char* ptr, const char* end);
 
 class Model : public IResource
 {
@@ -182,29 +183,21 @@ public :
 		GLuint m_EBO;
 	};
 
-	// multithread
-	void	parserMulti(std::string const& id, ThreadPool& pool);
-
-	// creates nbChunk chunks of lines
-	std::vector<Chunk>	splitFileByLines(const std::vector<char>& buffer, size_t nbChunk);
-
-	// parse vertices in a chunk
-	void	parseChunk(std::vector<char>& buffer, Chunk chunk, std::promise<VerticesResult>* promResult);
-
-	// parse the faces of a file
-	void	parseFace(std::vector<char>& file, Chunk chunk, VerticesResult& result, std::promise<FacesResult>* promResult);
-
-
-	// singlethread
-	void	parserSingle(std::string const& id);
-
-	void	uploadToGPU();
-
 	Model(std::string const& id, ThreadPool& pool);
 	Model(std::string const& id);
 	~Model() = default;
 
-	void draw();
+	void	parserMultithread(std::string const& id, ThreadPool& pool);
+
+	std::vector<Chunk>	splitFileByLines(const std::vector<char>& file, size_t nbChunk);
+
+	void	parseChunkVertices(std::vector<char>& file, Chunk chunk, std::promise<VerticesResult>* promResult);
+
+	void	parseChunkFaces(std::vector<char>& file, Chunk chunk, VerticesResult& result, std::promise<FacesResult>* promResult);
+
+	void	parserSinglethread(std::string const& id);
+	void	uploadToGPU();
+	void	draw();
 
 private :
 	

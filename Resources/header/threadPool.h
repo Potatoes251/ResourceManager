@@ -14,7 +14,7 @@ public:
 
 	// enqueue a function with param
 	template<class Func, typename... Args>
-	void enqueue(Func&& f, Args&&... args)
+	void	enqueue(Func&& f, Args&&... args)
 	{
 		{
 			std::unique_lock<std::mutex> lock(m_queueMutex);
@@ -26,7 +26,7 @@ public:
 
 	// enqueue a member function with param
 	template <typename Obj, typename MemFunc, typename... Args>
-	void enqueue(Obj* obj, MemFunc func, Args&&... args)
+	void	enqueue(Obj* obj, MemFunc func, Args&&... args)
 	{
 		{
 			std::unique_lock<std::mutex> lock(m_queueMutex);
@@ -40,7 +40,7 @@ public:
 
 private :
 
-	void workerLoop();
+	void	workerLoop();
 
 	std::vector<std::thread>			m_workers;
 	std::queue<std::function<void()>>	m_tasks;

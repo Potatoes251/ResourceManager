@@ -25,7 +25,7 @@ ThreadPool::~ThreadPool()
     }
 }
 
-void ThreadPool::workerLoop()
+void    ThreadPool::workerLoop()
 {
     while (true)
     {

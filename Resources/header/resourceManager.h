@@ -5,12 +5,12 @@
 #include <string>
 #include <memory>
 #include <iostream>
-#include <fstream>	// open file
-#include <sstream>	// string stream
+#include <fstream>
+#include <sstream>
 
 #include "threadPool.h"
 
-// add timer for the parser to see how long it takes
+// add timer when creating resources
 #if 1
 #include <chrono>
 #define TEST_TIME
@@ -27,7 +27,7 @@ public:
 class ResourceManager
 {
 public:
-	ResourceManager() = default;
+	ResourceManager(bool multi) : m_multithread(multi) {}
 	~ResourceManager()
 	{
 		clearAll();
@@ -45,14 +45,14 @@ public:
 		m_resourceMap.clear();	// Explicitly destroys all unique_ptr-held resources
 	}
 
-	// create a resource on another without callback
+	// create a resource on another thread without callback
 	template <typename T>
 	void	createAsync(std::string id)
 	{
 		m_pool.enqueue(this, &ResourceManager::Create<T>, id);
 	}
 
-	// create a resource on another thread and then call onLoaded with the created resource and args
+	// create a resource on another thread with callback
 	template <typename T, typename Callback, typename... Args>
 	void	createAsync(std::string id, Callback&& onLoaded, Args&&... args)
 	{
@@ -114,7 +114,7 @@ public:
 	}
 
 	template <typename T>
-	T* Get(std::string id)
+	T*		Get(std::string id)
 	{
 		std::unique_lock<std::mutex> lock(m_mutex);
 		auto it = m_resourceMap.find(id);
@@ -129,10 +129,9 @@ public:
 		}
 	}
 
-	bool			m_multithread = true;
-
 private:
 
+	bool			m_multithread;
 	ThreadPool		m_pool;
 	std::mutex		m_mutex;
 
