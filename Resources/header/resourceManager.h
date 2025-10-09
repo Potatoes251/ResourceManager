@@ -109,7 +109,7 @@ public:
 #ifdef TEST_TIME
 		auto end = std::chrono::high_resolution_clock::now();
 		std::chrono::duration<double> elapsed = end - start;
-		printf("Parsed %s in %fs\n", id.c_str(), elapsed.count());
+		printf("Parsed %s in %fs (%s)\n", id.c_str(), elapsed.count(), m_multithread ? "multithread" : "singlethread");
 #endif
 	}
 

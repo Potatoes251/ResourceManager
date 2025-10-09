@@ -9,7 +9,7 @@
 class ThreadPool
 {
 public:
-	ThreadPool(size_t numThreads = std::thread::hardware_concurrency());
+	ThreadPool(size_t numThreads = std::thread::hardware_concurrency() - 1);
 	~ThreadPool();
 
 	// enqueue a function with param

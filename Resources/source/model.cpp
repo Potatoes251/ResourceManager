@@ -80,7 +80,11 @@ LibMath::Vector3	parseVec3(const char* ptr, const char* end)
 	{
 		++ptr;
 	}
-	++ptr;
+
+	while (*ptr == ' ') 
+	{
+		++ptr;
+	}
 	position.m_x = parseFloat(ptr, end);
 	while (*ptr == ' ')
 	{
@@ -102,7 +106,11 @@ LibMath::Vector2	parseVec2(const char* ptr, const char* end)
 	{
 		++ptr;
 	}
-	++ptr;
+
+	while (*ptr == ' ')
+	{
+		++ptr;
+	}
 	position.m_x = parseFloat(ptr, end);
 	while (*ptr == ' ')
 	{
@@ -179,7 +187,7 @@ void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 		global_result.m_normals.insert(global_result.m_normals.end(), f.m_normals.begin(), f.m_normals.end());
 	}
 
-	std::vector<std::promise<FacesResult>>	promResultIndex(nbChunk);
+	std::vector<std::promise<FacesResult>>		promResultIndex(nbChunk);
 	std::vector<std::future<FacesResult>>		futureResultIndex(nbChunk);
 
 	for (int i = 0; i < nbChunk; i++)
@@ -214,7 +222,6 @@ void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 		{
 			idx += static_cast<uint32_t>(baseIndex);
 		}
-
 		// Merge result into your mesh/indices
 		m_indices.insert(m_indices.end(), f.m_indices.begin(), f.m_indices.end());
 		m_mesh.insert(m_mesh.end(), f.m_mesh.begin(), f.m_mesh.end());
@@ -326,7 +333,7 @@ void	Model::parseChunkFaces(std::vector<char>& file, Chunk chunk, VerticesResult
 			continue;
 		}
 
-        ptr += 2; // skip 'f' and a space
+        ptr++; // skip 'f'
 
         for (int vi = 0; vi < 3; ++vi)
         {
@@ -401,135 +408,141 @@ void	Model::parseChunkFaces(std::vector<char>& file, Chunk chunk, VerticesResult
 	promResult->set_value({ mesh, indices });
 }
 
-// Old Parser
+
+
 void	Model::parserSinglethread(std::string const& id)
 {
-	std::ifstream file("../../assets/meshes/" + id);	// open the file
-	if (!file.is_open()) 
+	// Open the file in binary mode and move cursor to end
+	std::ifstream file("../../assets/meshes/" + id, std::ios::binary | std::ios::ate);
+	if (!file.is_open())
 	{
-		std::cerr << "Failed to open file" << std::endl;	// handle file not found
+		std::cerr << "Failed to open file: " << id << std::endl;
 		return;
 	}
 
-	// buffer vectors to stores extracted values from "v", "vt" and "vn"
+	size_t fileSize = static_cast<size_t>(file.tellg());
+	file.seekg(0);
+
+	std::vector<char> buffer(fileSize);
+	file.read(buffer.data(), fileSize);
+	file.close();
+
+	if (buffer.empty())
+	{
+		std::cerr << "File is empty: " << id << std::endl;
+		return;
+	}
+
+	if (buffer.back() != '\n')
+		buffer.push_back('\n');
+
+	// Storage for parsed data
 	std::vector<LibMath::Vector3> positions, normals;
 	std::vector<LibMath::Vector2> texCoords;
 
-
-	std::string line, word;
-	char* c_word;
-
-	// temp variable to store vertices values
 	LibMath::Vector3 position, normal;
 	LibMath::Vector2 texCoord;
-	int index = 0;
 
-	// Map to avoid duplicate vertices: maps a string like "1/1/1" to the final vertex index
-	std::unordered_map<std::string, uint32_t> vertexMap;
+	std::unordered_map<uint64_t, uint32_t> vertexMap;
 
-	while (std::getline(file, line))	// go through the file line per line
+	size_t i = 0;
+
+	while (i < buffer.size())
 	{
-		std::stringstream	iss(line);
-		iss >> word;
-		c_word = word.data();
+		size_t endLine = i;
+		while (endLine < buffer.size() && buffer[endLine] != '\n')
+			++endLine;
 
-		// Check the first character(s)
+		std::string_view line(&buffer[i], endLine - i);
+		if (line.empty() || line[0] == '#')
+		{
+			i = ++endLine;
+			continue;
+		}
+
 		char first = line[0];
 		char second = line.size() > 1 ? line[1] : '\0';
-
 		const char* ptr = line.data();
 		const char* end = ptr + line.size();
 
 		if (first == 'v' && second == ' ')
 		{
-			while (*ptr != ' ') ++ptr; ++ptr;
-			position.m_x = parseFloat(ptr, end);
-			while (*ptr == ' ') ++ptr;
-			position.m_y = parseFloat(ptr, end);
-			while (*ptr == ' ') ++ptr;
-			position.m_z = parseFloat(ptr, end);
-			positions.push_back(position);
+			positions.push_back(parseVec3(ptr, end));
+		}
+		else if (first == 'v' && second == 't')
+		{
+			texCoords.push_back(parseVec2(ptr, end));
 		}
 		else if (first == 'v' && second == 'n')
 		{
-			while (*ptr != ' ') ++ptr; ++ptr;
-			normal.m_x = parseFloat(ptr, end);
-			while (*ptr == ' ') ++ptr;
-			normal.m_y = parseFloat(ptr, end);
-			while (*ptr == ' ') ++ptr;
-			normal.m_z = parseFloat(ptr, end);
-			normals.push_back(normal);
+			normals.push_back(parseVec3(ptr, end));
 		}
-		else if (strcmp(c_word, "vt") == 0)
+		// ---- Parse Faces ----
+		else if (first == 'f' && second == ' ')
 		{
-			iss >> texCoord.m_x >> texCoord.m_y;
+			ptr += 2; // skip 'f '
 
-			texCoords.push_back(texCoord);
-		}
-		else if (strcmp(c_word, "f") == 0)
-		{
-			char del = '/';
-			for (int i = 0; i < 3; ++i)
+			for (int vi = 0; vi < 3; ++vi)
 			{
+				int vIdx = 0, vtIdx = 0, vnIdx = 0;
 
-				std::string token;
-				iss >> token; // Read one vertex string like "1/1/1"
+				while (ptr < end && *ptr == ' ')
+					++ptr;
+				if (ptr >= end) break;
 
-				if (vertexMap.count(token) == 0)
+				const char* start = ptr;
+				while (ptr < end && *ptr != '/' && *ptr != ' ')
+					++ptr;
+				if (ptr > start)
+					vIdx = parseInt(start, ptr);
+
+				// vt
+				if (ptr < end && *ptr == '/')
+					++ptr;
+				start = ptr;
+				while (ptr < end && *ptr != '/' && *ptr != ' ')
+					++ptr;
+				if (ptr > start)
+					vtIdx = parseInt(start, ptr);
+
+				// vn
+				if (ptr < end && *ptr == '/')
+					++ptr;
+				start = ptr;
+				while (ptr < end && *ptr != ' ' && ptr < end)
+					++ptr;
+				if (ptr > start)
+					vnIdx = parseInt(start, ptr);
+
+				// Pack into 64-bit key for deduplication
+				uint64_t key = ((uint64_t)vIdx << 40) | ((uint64_t)vtIdx << 20) | (uint64_t)vnIdx;
+
+				auto it = vertexMap.find(key);
+				if (it == vertexMap.end())
 				{
-					std::stringstream tokenStream(token);
-					std::string vStr, vtStr, vnStr;
+					vIdx = vIdx < 0 ? (int)positions.size() + vIdx : vIdx - 1;
+					vtIdx = vtIdx < 0 ? (int)texCoords.size() + vtIdx : vtIdx - 1;
+					vnIdx = vnIdx < 0 ? (int)normals.size() + vnIdx : vnIdx - 1;
 
-					getline(tokenStream, vStr, del);
-					getline(tokenStream, vtStr, del);
-					getline(tokenStream, vnStr, del);
-
-					if (!vStr.empty())
-					{
-						index = parseInt(vStr.data(), vStr._Unchecked_end());
-						index = index < 0 ? static_cast<int>(positions.size()) + index : index - 1;
-						if (index >= 0 && index < positions.size())
-							position = positions[index];
-					}
-
-
-					if (!vtStr.empty())
-					{
-						index = parseInt(vtStr.data(), vtStr._Unchecked_end());
-						index = index < 0 ? static_cast<int>(texCoords.size()) + index : index - 1;
-						if (index >= 0 && index < texCoords.size())
-							texCoord = texCoords[index];
-					}
-
-
-					if (!vnStr.empty())
-					{
-						index = parseInt(vnStr.data(), vnStr._Unchecked_end());
-						index = index < 0 ? static_cast<int>(normals.size()) + index : index - 1;
-						if (index >= 0 && index < normals.size())
-							normal = normals[index];
-					}
+					if (vIdx >= 0 && vIdx < (int)positions.size()) position = positions[vIdx];
+					if (vtIdx >= 0 && vtIdx < (int)texCoords.size()) texCoord = texCoords[vtIdx];
+					if (vnIdx >= 0 && vnIdx < (int)normals.size()) normal = normals[vnIdx];
 
 					m_mesh.push_back(Vertex(position, normal, texCoord));
-
-					m_indices.push_back(m_mesh.size() - 1);
-
-					vertexMap[token] = m_mesh.size() - 1;
+					uint32_t idx = static_cast<uint32_t>(m_mesh.size() - 1);
+					m_indices.push_back(idx);
+					vertexMap[key] = idx;
 				}
 				else
 				{
-					// Reuse the cached index for duplicate vertex
-					m_indices.push_back(vertexMap[token]);
+					m_indices.push_back(it->second);
 				}
 			}
 		}
 
+		i = ++endLine;
 	}
-
-	file.close();
 }
-
-
 
 void	Model::uploadToGPU()
 {

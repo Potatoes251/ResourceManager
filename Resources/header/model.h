@@ -11,7 +11,7 @@
 #include <GLFW/glfw3.h>
 
 #define MIN_CHUNK_SIZE_BYTE 250'000
-#define MAX_THREAD 1
+#define MAX_THREAD 4
 
 struct Vertex
 {

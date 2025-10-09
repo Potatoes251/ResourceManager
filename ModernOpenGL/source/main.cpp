@@ -185,6 +185,8 @@ int		main()
 		glfwSetKeyCallback(app.getWindow(), processInput);
 
 		reset = mainLoop(app, camera, graph, shader);
+
+		multithread = !multithread;
 	}
 	_CrtDumpMemoryLeaks();
 	return 0;
