@@ -19,11 +19,11 @@ public :
 	void update(GLFWwindow* window);
 	void processMouseMovement(double xpos, double ypos);
 
-	static void	mouseCallback(GLFWwindow* window, double xpos, double ypos)
-	{
-		Camera* cam = static_cast<Camera*>(glfwGetWindowUserPointer(window));
-		cam->processMouseMovement(xpos, ypos);
-	}
+	//static void	mouseCallback(GLFWwindow* window, double xpos, double ypos)
+	//{
+	//	Camera* cam = static_cast<Camera*>(glfwGetWindowUserPointer(window));
+	//	cam->processMouseMovement(xpos, ypos);
+	//}
 
 	LibMath::Matrix4 getVPMatrix() const;
 	LibMath::Vector3 getPosition() const;

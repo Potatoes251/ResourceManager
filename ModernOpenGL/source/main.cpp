@@ -4,6 +4,7 @@
 #include "texture.h"
 #include "light.h"
 #include "graph.h"
+#include "SoundManager.h"
 
 #include <string>
 
@@ -134,21 +135,21 @@ void	processInput(GLFWwindow* window, int key, int scancode, int action, int mod
 	}
 }
 
+void	mouseCallback(GLFWwindow* window, double xpos, double ypos)
+{
+	AppContext* ctx = static_cast<AppContext*>(glfwGetWindowUserPointer(window));
+	ctx->m_camera->processMouseMovement(xpos, ypos);
+}
+
 bool	mainLoop(Application& app, Camera& camera, Graph& graph, Shader& shader)
 {
 	while (!glfwWindowShouldClose(app.getWindow()))
 	{
-		AppContext* ctx = static_cast<AppContext*>(glfwGetWindowUserPointer(app.getWindow()));
-
 		app.update();
 		app.runMainThreadTasks();
 		camera.update(app.getWindow());
 
 		if (glfwGetKey(app.getWindow(), GLFW_KEY_R) == GLFW_PRESS)
-		{
-			return true;
-		}
-		else if (glfwGetKey(app.getWindow(), GLFW_KEY_T) == GLFW_PRESS)
 		{
 			return true;
 		}
@@ -172,17 +173,18 @@ int		main()
 	while (reset)
 	{
 		ResourceManager rm(multithread);
-		Graph graph;
+		Graph			graph;
+		SoundManager    soundManager;
+		Camera			camera(LibMath::Vector3(0.0f, 0.0f, -5.0f), LibMath::Vector3(0.0f, 0.0f, -1.0f));
+		Application		app(&rm, &graph, &camera);
+		Shader			shader;
 
-		Camera camera(LibMath::Vector3(0.0f, 0.0f, 5.0f), LibMath::Vector3(0.0f, 0.0f, -1.0f));
-
-		Application app(&rm, &graph, &camera);
-
-		Shader shader;
+		soundManager.playMusic("../../Assets/Sounds/calmPiano.ogg", true);
 
 		initResources(shader, camera, rm);
 
 		glfwSetKeyCallback(app.getWindow(), processInput);
+		glfwSetCursorPosCallback(app.getWindow(), mouseCallback);
 
 		reset = mainLoop(app, camera, graph, shader);
 

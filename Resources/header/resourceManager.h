@@ -49,14 +49,14 @@ public:
 	template <typename T>
 	void	createAsync(std::string id)
 	{
-		m_pool.enqueue(this, &ResourceManager::Create<T>, id);
+		m_pool.enqueue(TaskType::GENERAL, this, &ResourceManager::Create<T>, id);
 	}
 
 	// create a resource on another thread with callback
 	template <typename T, typename Callback, typename... Args>
 	void	createAsync(std::string id, Callback&& onLoaded, Args&&... args)
 	{
-		m_pool.enqueue([this, id,
+		m_pool.enqueue(TaskType::GENERAL, [this, id,
 			onLoaded = std::forward<Callback>(onLoaded),
 			argsTuple = std::make_tuple(std::forward<Args>(args)...)]() mutable
 			{
@@ -129,10 +129,10 @@ public:
 		}
 	}
 
+	ThreadPool		m_pool;
 private:
 
 	bool			m_multithread;
-	ThreadPool		m_pool;
 	std::mutex		m_mutex;
 
 	std::unordered_map<std::string, std::unique_ptr<IResource>> m_resourceMap;

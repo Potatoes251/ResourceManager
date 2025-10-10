@@ -2,6 +2,15 @@
 #include "LibMath/Vector.h"
 
 
+float	fastPow10(int exp)
+{
+	static const float pow10Table[] = {
+		1e-10f, 1e-9f, 1e-8f, 1e-7f, 1e-6f, 1e-5f, 1e-4f, 1e-3f, 1e-2f, 1e-1f,
+		1e0f, 1e1f, 1e2f, 1e3f, 1e4f, 1e5f, 1e6f, 1e7f, 1e8f, 1e9f, 1e10f
+	};
+	exp = std::clamp(exp, -10, 10);
+	return pow10Table[exp + 10];
+}
 
 float	parseFloat(const char*& ptr, const char* end)
 {
@@ -55,7 +64,7 @@ float	parseFloat(const char*& ptr, const char* end)
 			exponent = -exponent;
 		}
 
-		result *= std::pow(10.0f, exponent);
+		result *= fastPow10(exponent);
 	}
 
 	return neg ? -result : result;
@@ -64,12 +73,23 @@ float	parseFloat(const char*& ptr, const char* end)
 int		parseInt(const char* ptr, const char* end)
 {
 	bool neg = false;
-	if (ptr < end && *ptr == '-') { neg = true; ++ptr; }
-
-	else if (ptr < end && *ptr == '+') { neg = false; ++ptr; }
+	if (ptr < end && *ptr == '-')
+	{
+		neg = true; ++ptr;
+	}
+	else if (ptr < end && *ptr == '+')
+	{
+		neg = false; ++ptr;
+	}
 	int value = 0;
-	while (ptr < end && *ptr >= '0' && *ptr <= '9')
-		value = value * 10 + (*ptr++ - '0');
+
+	while (ptr < end)
+	{
+		unsigned char c = *ptr - '0';
+		if (c > 9) break;
+		value = value * 10 + c;
+		++ptr;
+	}
 	return neg ? -value : value;
 }
 
@@ -123,6 +143,9 @@ LibMath::Vector2	parseVec2(const char* ptr, const char* end)
 
 void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 {
+#ifdef TEST_TIME
+	auto start = std::chrono::high_resolution_clock::now();
+#endif
 	// open the file and set cursor at the end
 	std::ifstream file("../../assets/meshes/" + id, std::ios::binary | std::ios::ate);
 	if (!file.is_open())
@@ -142,20 +165,34 @@ void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 	{
 		buffer.push_back('\n');
 	}
+#ifdef TEST_TIME
+	auto end = std::chrono::high_resolution_clock::now();
+	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+	printf("Open %lldms\n", elapsed.count());
+#endif
 
 	size_t nbChunk = buffer.size() / MIN_CHUNK_SIZE_BYTE;
 	nbChunk = std::max(std::min((int)nbChunk, MAX_THREAD), 1);
 
 	printf("Spliting %s into %zu chunks\n", id.c_str(), nbChunk);
-
+#ifdef TEST_TIME
+	start = std::chrono::high_resolution_clock::now();
+#endif
 	std::vector<Chunk> chunks = splitFileByLines(buffer, nbChunk);
+#ifdef TEST_TIME
+	end = std::chrono::high_resolution_clock::now();
+	elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+	printf("Split : %lldms\n", elapsed.count());
+#endif
 	std::vector<std::promise<VerticesResult>>	promResultMesh(nbChunk);
 	std::vector<std::future<VerticesResult>>	futureResultMesh(nbChunk);
-
+#ifdef TEST_TIME
+	start = std::chrono::high_resolution_clock::now();
+#endif
 	for (int i = 0; i < nbChunk; i++)
 	{
 		futureResultMesh[i] = promResultMesh[i].get_future();
-		pool.enqueue(this, &Model::parseChunkVertices, std::ref(buffer), chunks[i], &(promResultMesh[i]));
+		pool.enqueue(TaskType::GENERAL, this, &Model::parseChunkVertices, std::ref(buffer), chunks[i], &(promResultMesh[i]));
 	}
 
 	int nbPos = 0;
@@ -186,14 +223,19 @@ void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 		global_result.m_texCoords.insert(global_result.m_texCoords.end(), f.m_texCoords.begin(), f.m_texCoords.end());
 		global_result.m_normals.insert(global_result.m_normals.end(), f.m_normals.begin(), f.m_normals.end());
 	}
-
+#ifdef TEST_TIME
+	end = std::chrono::high_resolution_clock::now();
+	elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+	printf("Vertex : %lldms\n", elapsed.count());
+	start = std::chrono::high_resolution_clock::now();
+#endif
 	std::vector<std::promise<FacesResult>>		promResultIndex(nbChunk);
 	std::vector<std::future<FacesResult>>		futureResultIndex(nbChunk);
 
 	for (int i = 0; i < nbChunk; i++)
 	{
 		futureResultIndex[i] = promResultIndex[i].get_future();
-		pool.enqueue(this, &Model::parseChunkFaces, std::ref(buffer), chunks[i], std::ref(global_result), &(promResultIndex[i]));
+		pool.enqueue(TaskType::GENERAL, this, &Model::parseChunkFaces, std::ref(buffer), chunks[i], std::ref(global_result), &(promResultIndex[i]));
 	}
 
 	std::vector<FacesResult> futuresResult;
@@ -216,7 +258,6 @@ void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 	for (auto& f : futuresResult)
 	{
 		size_t baseIndex = m_mesh.size();  // offset = current vertex count
-
 		// adjust indices from this chunk
 		for (uint32_t& idx : f.m_indices)
 		{
@@ -226,6 +267,11 @@ void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 		m_indices.insert(m_indices.end(), f.m_indices.begin(), f.m_indices.end());
 		m_mesh.insert(m_mesh.end(), f.m_mesh.begin(), f.m_mesh.end());
 	}
+#ifdef TEST_TIME
+	end = std::chrono::high_resolution_clock::now();
+	elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+	printf("Faces : %lldms\n", elapsed.count());
+#endif
 }
 
 std::vector<Chunk> Model::splitFileByLines(const std::vector<char>& buffer, size_t nbChunk)
@@ -303,14 +349,15 @@ void	Model::parseChunkVertices(std::vector<char>& file, Chunk chunk, std::promis
 
 void	Model::parseChunkFaces(std::vector<char>& file, Chunk chunk, VerticesResult& result, std::promise<FacesResult>* promResult)
 {
-	// Map to avoid duplicate vertices: maps a string like "1/1/1" to the final vertex index
-	std::unordered_map<uint64_t, uint32_t> vertexMap;
-
 	size_t i = chunk.m_start;
 
 	std::vector<Vertex> mesh;
 	std::vector<uint32_t> indices;
 
+	int avgLineLengthEstimate = 50;
+
+	mesh.reserve((chunk.m_end - chunk.m_start) / avgLineLengthEstimate);
+	indices.reserve(mesh.capacity() * 3);
 	// temp variable to store vertices values
 	LibMath::Vector3 position, normal;
 	LibMath::Vector2 texCoord;
@@ -379,28 +426,17 @@ void	Model::parseChunkFaces(std::vector<char>& file, Chunk chunk, VerticesResult
 			if (ptr > start)
 				vnIdx = parseInt(start, ptr);
 
-			// Pack indices into a 64-bit key
-            uint64_t key = ((uint64_t)vIdx << 40) | ((uint64_t)vtIdx << 20) | (uint64_t)vnIdx;
+            vIdx	= vIdx < 0 ?  (int)result.m_positions.size() + vIdx : vIdx - 1;
+            vtIdx	= vtIdx < 0 ? (int)result.m_texCoords.size() + vtIdx : vtIdx - 1;
+            vnIdx	= vnIdx < 0 ? (int)result.m_normals.size() + vnIdx : vnIdx - 1;
 
-            auto it = vertexMap.find(key);
-            if (it == vertexMap.end())
-            {
-                vIdx	= vIdx < 0 ?  (int)result.m_positions.size() + vIdx : vIdx - 1;
-                vtIdx	= vtIdx < 0 ? (int)result.m_texCoords.size() + vtIdx : vtIdx - 1;
-                vnIdx	= vnIdx < 0 ? (int)result.m_normals.size() + vnIdx : vnIdx - 1;
+            if (vIdx >= 0)	position	= result.m_positions[vIdx];
+            if (vtIdx >= 0) texCoord	= result.m_texCoords[vtIdx];
+            if (vnIdx >= 0) normal		= result.m_normals[vnIdx];
 
-                if (vIdx >= 0)	position	= result.m_positions[vIdx];
-                if (vtIdx >= 0) texCoord	= result.m_texCoords[vtIdx];
-                if (vnIdx >= 0) normal		= result.m_normals[vnIdx];
-
-                mesh.push_back(Vertex(position, normal, texCoord));
-                indices.push_back(mesh.size() - 1);
-                vertexMap[key] = mesh.size() - 1;
-            }
-            else
-            {
-                indices.push_back(it->second);
-            }
+            mesh.push_back(Vertex(position, normal, texCoord));
+            indices.push_back(mesh.size() - 1);
+            
         }
 		
 		i = ++endLine;

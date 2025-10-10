@@ -56,7 +56,7 @@ void Camera::updateView()   // lookat matrix
         m_right.m_x,                m_up.m_x,               -m_forward.m_x,              .0f,
         m_right.m_y,                m_up.m_y,               -m_forward.m_y,              .0f,
         m_right.m_z,                m_up.m_z,               -m_forward.m_z,              .0f,
-        -m_right.dot(m_position),   -m_up.dot(m_position),  -m_forward.dot(m_position), 1.0f);
+        -m_right.dot(m_position),   -m_up.dot(m_position),  m_forward.dot(m_position), 1.0f);
 
     m_viewProjection = m_projection * m_view;
 }
@@ -71,37 +71,31 @@ void Camera::update(GLFWwindow* window)
     {
         m_position += m_forward * zoomSpeed;
     }
-
     // Backward (U)
     if (glfwGetKey(window, GLFW_KEY_U) == GLFW_PRESS)
     {
         m_position -= m_forward * zoomSpeed;
     }
-
     // Left (J)
     if (glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS)
     {
         m_position -= m_right * moveSpeed;
     }
-
     // Right (L)
     if (glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS)
     {
         m_position += m_right * moveSpeed;
     }
-
     // Up (K)
     if (glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS)
     {
         m_position -= m_up * moveSpeed;
     }
-
     // Down (I)
     if (glfwGetKey(window, GLFW_KEY_I) == GLFW_PRESS)
     {
         m_position += m_up * moveSpeed;
     }
-
     updateVector();
 }
 
