@@ -60,7 +60,7 @@ void	onMesh2Loaded(Model* model, Graph* graph, ResourceManager& rm, Application*
 
 void	loadMesh2(ResourceManager& rm, Graph* graph, Application* app)
 {
-	std::string file = "bunny.obj";
+	std::string file = "locomotive.obj";
 	rm.createAsync<Model>(file, onMesh2Loaded, graph, std::ref(rm), app);
 }
 
@@ -174,12 +174,12 @@ int		main()
 	{
 		ResourceManager rm(multithread);
 		Graph			graph;
-		SoundManager    soundManager;
+		//SoundManager    soundManager;
 		Camera			camera(LibMath::Vector3(0.0f, 0.0f, -5.0f), LibMath::Vector3(0.0f, 0.0f, -1.0f));
 		Application		app(&rm, &graph, &camera);
 		Shader			shader;
 
-		soundManager.playMusic("../../Assets/Sounds/calmPiano.ogg", true);
+		//soundManager.playMusic("../../Assets/Sounds/calmPiano.ogg", true);
 
 		initResources(shader, camera, rm);
 

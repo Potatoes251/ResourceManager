@@ -192,9 +192,14 @@ void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 	for (int i = 0; i < nbChunk; i++)
 	{
 		futureResultMesh[i] = promResultMesh[i].get_future();
-		pool.enqueue(TaskType::GENERAL, this, &Model::parseChunkVertices, std::ref(buffer), chunks[i], &(promResultMesh[i]));
+		pool.enqueue(this, &Model::parseChunkVertices, std::ref(buffer), chunks[i], &(promResultMesh[i]));
 	}
-
+#ifdef TEST_TIME
+	end = std::chrono::high_resolution_clock::now();
+	elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+	printf("Vertex dispatch : %lldms\n", elapsed.count());
+	start = std::chrono::high_resolution_clock::now();
+#endif
 	int nbPos = 0;
 	int nbTex = 0;
 	int nbNor = 0;
@@ -226,7 +231,7 @@ void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 #ifdef TEST_TIME
 	end = std::chrono::high_resolution_clock::now();
 	elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	printf("Vertex : %lldms\n", elapsed.count());
+	printf("Merge1 : %lldms\n", elapsed.count());
 	start = std::chrono::high_resolution_clock::now();
 #endif
 	std::vector<std::promise<FacesResult>>		promResultIndex(nbChunk);
@@ -235,9 +240,14 @@ void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 	for (int i = 0; i < nbChunk; i++)
 	{
 		futureResultIndex[i] = promResultIndex[i].get_future();
-		pool.enqueue(TaskType::GENERAL, this, &Model::parseChunkFaces, std::ref(buffer), chunks[i], std::ref(global_result), &(promResultIndex[i]));
+		pool.enqueue(this, &Model::parseChunkFaces, std::ref(buffer), chunks[i], std::ref(global_result), &(promResultIndex[i]));
 	}
-
+#ifdef TEST_TIME
+	end = std::chrono::high_resolution_clock::now();
+	elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+	printf("Faces dispatch : %lldms\n", elapsed.count());
+	start = std::chrono::high_resolution_clock::now();
+#endif
 	std::vector<FacesResult> futuresResult;
 
 	int meshSize = 0;
@@ -251,7 +261,12 @@ void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 		meshSize += result.m_mesh.size();
 		indexSize += result.m_indices.size();
 	}
-
+#ifdef TEST_TIME
+	end = std::chrono::high_resolution_clock::now();
+	elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+	printf("Face parsing : %lldms\n", elapsed.count());
+	start = std::chrono::high_resolution_clock::now();
+#endif
 	m_indices.reserve(indexSize);
 	m_mesh.reserve(meshSize);
 
@@ -270,7 +285,7 @@ void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 #ifdef TEST_TIME
 	end = std::chrono::high_resolution_clock::now();
 	elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	printf("Faces : %lldms\n", elapsed.count());
+	printf("Merge2 : %lldms\n", elapsed.count());
 #endif
 }
 
@@ -354,7 +369,7 @@ void	Model::parseChunkFaces(std::vector<char>& file, Chunk chunk, VerticesResult
 	std::vector<Vertex> mesh;
 	std::vector<uint32_t> indices;
 
-	int avgLineLengthEstimate = 50;
+	int avgLineLengthEstimate = 30;
 
 	mesh.reserve((chunk.m_end - chunk.m_start) / avgLineLengthEstimate);
 	indices.reserve(mesh.capacity() * 3);
