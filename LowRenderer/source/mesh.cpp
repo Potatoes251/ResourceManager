@@ -15,6 +15,7 @@ void Mesh::draw(Camera const& camera, Shader const& shader)
 	normalMatrix.transpose();
 
 	//send it to the shader
+	shader.setUniform("u_Model", m_transform);
 	shader.setUniform("u_MVP", MVP);
 	shader.setUniform("u_NormalMat", normalMatrix);
 
@@ -30,7 +31,8 @@ void Mesh::draw(Camera const& camera, Shader const& shader, LibMath::Matrix4 tra
 	normalMatrix.transpose();
 
 	//send it to the shader
-	shader.setUniform("u_MVP", MVP);
+	shader.setUniform("u_Model", trans);
+	shader.setUniform("u_ModelViewProjection", MVP);
 	shader.setUniform("u_NormalMat", normalMatrix);
 
 	m_model->draw();

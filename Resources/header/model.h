@@ -46,11 +46,19 @@ struct FacesResult
 	std::vector<uint32_t> m_indices;
 };
 
+struct FaceIndex
+{
+	int vIdx;
+	int vtIdx;
+	int vnIdx;
+};
+
 inline float		fastPow10(int exp);
 inline float		parseFloat(const char*& ptr, const char* end);
 inline int			parseInt(const char* ptr, const char* end);
 LibMath::Vector3	parseVec3(const char* ptr, const char* end);
 LibMath::Vector2	parseVec2(const char* ptr, const char* end);
+FaceIndex			parseIndices(const char* ptr, const char* end, VerticesResult& result);
 
 class Model : public IResource
 {

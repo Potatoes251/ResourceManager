@@ -41,6 +41,24 @@ void	loadMesh1(ResourceManager& rm, Graph* graph, Application* app)
 	rm.createAsync<Model>(file, onMesh1Loaded, graph, std::ref(rm), app);
 }
 
+void	copyMesh1(ResourceManager& rm, Graph* graph)
+{
+	Model* model = rm.Get<Model>("diablo3_pose/diablo3_pose.obj");
+
+	if (model == nullptr) return;
+
+	Mesh mesh(model,
+		LibMath::Matrix4::createTransform(
+			LibMath::Vector3(0.f, 0.f, 2.f),
+			LibMath::Vector3::up(),
+			LibMath::Radian(3.1415),
+			LibMath::Vector3(1.f, 1.f, 1.f)));
+
+	Graph::SceneNode* node = graph->addChild(nullptr, mesh);
+
+	node->setTexture(rm.Get<Texture>("container.png"));
+}
+
 void	onMesh2Loaded(Model* model, Graph* graph, ResourceManager& rm, Application* app)
 {
 	app->postToMain([=, &rm]() {
@@ -54,7 +72,7 @@ void	onMesh2Loaded(Model* model, Graph* graph, ResourceManager& rm, Application*
 				LibMath::Vector3(.5f, .5f, .5f)));
 
 		Graph::SceneNode* node = graph->addChild(nullptr, mesh);
-		node->setTexture(rm.Get<Texture>("awesomeface.png"));
+		node->setTexture(rm.Get<Texture>("Potatoes.png"));
 		});
 }
 
@@ -62,6 +80,24 @@ void	loadMesh2(ResourceManager& rm, Graph* graph, Application* app)
 {
 	std::string file = "locomotive.obj";
 	rm.createAsync<Model>(file, onMesh2Loaded, graph, std::ref(rm), app);
+}
+
+void	copyMesh2(ResourceManager& rm, Graph* graph)
+{
+	Model* model = rm.Get<Model>("locomotive.obj");
+
+	if (model == nullptr) return;
+
+	Mesh mesh(model,
+		LibMath::Matrix4::createTransform(
+			LibMath::Vector3(0.f, 3.f, 2.f),
+			LibMath::Vector3::up(),
+			LibMath::Radian(0),
+			LibMath::Vector3(1.f, 1.f, 1.f)));
+
+	Graph::SceneNode* node = graph->addChild(nullptr, mesh);
+
+	node->setTexture(rm.Get<Texture>("Potatoes.png"));
 }
 
 void	onMesh3Loaded(Model* model, Graph* graph, ResourceManager& rm, Application* app)
@@ -87,17 +123,76 @@ void	loadMesh3(ResourceManager& rm, Graph* graph, Application* app)
 	rm.createAsync<Model>(file, onMesh3Loaded, graph, std::ref(rm), app);
 }
 
+void	copyMesh3(ResourceManager& rm, Graph* graph)
+{
+	Model* model = rm.Get<Model>("dragon.obj");
+
+	if (model == nullptr) return;
+
+	Mesh mesh(model,
+		LibMath::Matrix4::createTransform(
+			LibMath::Vector3(0.f, -3.f, 2.f),
+			LibMath::Vector3::up(),
+			LibMath::Radian(-3.1415 / 2),
+			LibMath::Vector3(1.f, 1.f, 1.f)));
+
+	Graph::SceneNode* node = graph->addChild(nullptr, mesh);
+
+	node->setTexture(rm.Get<Texture>("Potatoes.png"));
+}
+
+void	onMesh4Loaded(Model* model, Graph* graph, ResourceManager& rm, Application* app)
+{
+	app->postToMain([=, &rm]() {
+		model->uploadToGPU();
+
+		Mesh mesh(model,
+			LibMath::Matrix4::createTransform(
+				LibMath::Vector3(3.f, 0.f, 0.f),
+				LibMath::Vector3::up(),
+				LibMath::Radian(0),
+				LibMath::Vector3(2.f, 2.f, 2.f)));
+
+		Graph::SceneNode* node = graph->addChild(nullptr, mesh);
+		node->setTexture(rm.Get<Texture>("container.jpg"));
+		});
+}
+
+void	loadMesh4(ResourceManager& rm, Graph* graph, Application* app)
+{
+	std::string file = "armadillo.obj";
+	rm.createAsync<Model>(file, onMesh4Loaded, graph, std::ref(rm), app);
+}
+
+void	copyMesh4(ResourceManager& rm, Graph* graph)
+{
+	Model* model = rm.Get<Model>("armadillo.obj");
+
+	if (model == nullptr) return;
+
+	Mesh mesh(model,
+		LibMath::Matrix4::createTransform(
+			LibMath::Vector3(3.f, 0.f, 2.f),
+			LibMath::Vector3::up(),
+			LibMath::Radian(0),
+			LibMath::Vector3(1.f, 1.f, 1.f)));
+
+	Graph::SceneNode* node = graph->addChild(nullptr, mesh);
+
+	node->setTexture(rm.Get<Texture>("container.png"));
+}
+
 void	initLights(Shader& shader, Camera& camera)
 {
 	//Light
 	Lights lights;
 
 	DirectionalLight light1(
-		LibMath::Vector4(1.0f, 1.0f, 1.0f, 1.0f),	// ambient: dark blue-ish
-		LibMath::Vector4(1.0f, 1.0f, 1.0f, 1.0f),   // diffuse: vibrant blue
-		LibMath::Vector4(1.0f, 1.0f, 1.0f, 1.0f),   // specular: ice blue
-		64.0f,                                      // shininess: high / metalic
-		LibMath::Vector3(0, 1.0f, 1.f)				// light direction: from above
+		LibMath::Vector4(0.1f, 0.1f, 0.15f, 1.0f), // ambient: subtle blue-ish
+		LibMath::Vector4(0.7f, 0.7f, 0.8f, 1.0f),  // diffuse: moderate
+		LibMath::Vector4(0.5f, 0.5f, 0.6f, 1.0f),  // specular: not too strong
+		32.0f,                                     // shininess: typical Blinn-Phong
+		LibMath::Vector3(0, .0f, 1.f)				// light direction: from above
 	);
 
 	lights.addDirectionalLight(light1);
@@ -118,20 +213,53 @@ void	initResources(Shader& shader, Camera& camera, ResourceManager& rm)
 void	processInput(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	AppContext* ctx = static_cast<AppContext*>(glfwGetWindowUserPointer(window));
-	if (!ctx->mesh1Loaded && key == GLFW_KEY_1)
+	if (key == GLFW_KEY_1)
 	{
-		ctx->mesh1Loaded = true;
-		loadMesh1(*(ctx->m_rm), ctx->m_graph, ctx->m_app);
+		if (ctx->mesh1Loaded)
+		{
+			copyMesh1(*(ctx->m_rm), ctx->m_graph);
+		}
+		else
+		{
+			ctx->mesh1Loaded = true;
+			loadMesh1(*(ctx->m_rm), ctx->m_graph, ctx->m_app);
+		}
 	}
-	else if (!ctx->mesh2Loaded && key == GLFW_KEY_2)
+	else if (key == GLFW_KEY_2)
 	{
-		ctx->mesh2Loaded = true;
-		loadMesh2(*(ctx->m_rm), ctx->m_graph, ctx->m_app);
+		if (ctx->mesh2Loaded)
+		{
+			copyMesh2(*(ctx->m_rm), ctx->m_graph);
+		}
+		else
+		{
+			ctx->mesh2Loaded = true;
+			loadMesh2(*(ctx->m_rm), ctx->m_graph, ctx->m_app);
+		}
 	}
-	else if (!ctx->mesh3Loaded && key == GLFW_KEY_3)
+	else if (key == GLFW_KEY_3)
 	{
-		ctx->mesh3Loaded = true;
-		loadMesh3(*(ctx->m_rm), ctx->m_graph, ctx->m_app);
+		if (ctx->mesh3Loaded)
+		{
+			copyMesh3(*(ctx->m_rm), ctx->m_graph);
+		}
+		else
+		{
+			ctx->mesh3Loaded = true;
+			loadMesh3(*(ctx->m_rm), ctx->m_graph, ctx->m_app);
+		}
+	}
+	else if (key == GLFW_KEY_4)
+	{
+		if (ctx->mesh4Loaded)
+		{
+			copyMesh4(*(ctx->m_rm), ctx->m_graph);
+		}
+		else
+		{
+			ctx->mesh4Loaded = true;
+			loadMesh4(*(ctx->m_rm), ctx->m_graph, ctx->m_app);
+		}
 	}
 }
 
@@ -174,12 +302,9 @@ int		main()
 	{
 		ResourceManager rm(multithread);
 		Graph			graph;
-		//SoundManager    soundManager;
 		Camera			camera(LibMath::Vector3(0.0f, 0.0f, -5.0f), LibMath::Vector3(0.0f, 0.0f, -1.0f));
 		Application		app(&rm, &graph, &camera);
 		Shader			shader;
-
-		//soundManager.playMusic("../../Assets/Sounds/calmPiano.ogg", true);
 
 		initResources(shader, camera, rm);
 

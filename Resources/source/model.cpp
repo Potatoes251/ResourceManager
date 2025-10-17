@@ -140,6 +140,41 @@ LibMath::Vector2	parseVec2(const char* ptr, const char* end)
 	return position;
 }
 
+inline FaceIndex	parseVertexIndices(const char*& ptr, const char* end)
+{
+	int vIdx = 0, vtIdx = 0, vnIdx = 0;
+
+	// Skip spaces
+	while (ptr < end && *ptr == ' ')
+		++ptr;
+
+	// --- v ---
+	const char* start = ptr;
+	while (ptr < end && *ptr != '/' && *ptr != ' ' && *ptr != '\n' && *ptr != '\r')
+		++ptr;
+	if (ptr > start)
+		vIdx = parseInt(start, ptr);
+
+	// --- vt ---
+	if (ptr < end && *ptr == '/')
+		++ptr;
+	start = ptr;
+	while (ptr < end && *ptr != '/' && *ptr != ' ' && *ptr != '\n' && *ptr != '\r')
+		++ptr;
+	if (ptr > start)
+		vtIdx = parseInt(start, ptr);
+
+	// --- vn ---
+	if (ptr < end && *ptr == '/')
+		++ptr;
+	start = ptr;
+	while (ptr < end && *ptr != ' ' && *ptr != '\n' && *ptr != '\r')
+		++ptr;
+	if (ptr > start)
+		vnIdx = parseInt(start, ptr);
+
+	return { vIdx, vtIdx, vnIdx };
+}
 
 void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 {
@@ -175,29 +210,18 @@ void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 	nbChunk = std::max(std::min((int)nbChunk, MAX_THREAD), 1);
 
 	printf("Spliting %s into %zu chunks\n", id.c_str(), nbChunk);
-#ifdef TEST_TIME
-	start = std::chrono::high_resolution_clock::now();
-#endif
+
 	std::vector<Chunk> chunks = splitFileByLines(buffer, nbChunk);
-#ifdef TEST_TIME
-	end = std::chrono::high_resolution_clock::now();
-	elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	printf("Split : %lldms\n", elapsed.count());
-#endif
+
 	std::vector<std::promise<VerticesResult>>	promResultMesh(nbChunk);
 	std::vector<std::future<VerticesResult>>	futureResultMesh(nbChunk);
-#ifdef TEST_TIME
-	start = std::chrono::high_resolution_clock::now();
-#endif
+
 	for (int i = 0; i < nbChunk; i++)
 	{
 		futureResultMesh[i] = promResultMesh[i].get_future();
 		pool.enqueue(this, &Model::parseChunkVertices, std::ref(buffer), chunks[i], &(promResultMesh[i]));
 	}
 #ifdef TEST_TIME
-	end = std::chrono::high_resolution_clock::now();
-	elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	printf("Vertex dispatch : %lldms\n", elapsed.count());
 	start = std::chrono::high_resolution_clock::now();
 #endif
 	int nbPos = 0;
@@ -369,93 +393,103 @@ void	Model::parseChunkFaces(std::vector<char>& file, Chunk chunk, VerticesResult
 	std::vector<Vertex> mesh;
 	std::vector<uint32_t> indices;
 
-	int avgLineLengthEstimate = 30;
-
+	const int avgLineLengthEstimate = 30;
 	mesh.reserve((chunk.m_end - chunk.m_start) / avgLineLengthEstimate);
 	indices.reserve(mesh.capacity() * 3);
-	// temp variable to store vertices values
+
 	LibMath::Vector3 position, normal;
 	LibMath::Vector2 texCoord;
 
 	while (i < chunk.m_end)
 	{
 		size_t endLine = i;
-		while (file[endLine] != '\n' && endLine < chunk.m_end)
-		{
+		while (endLine < chunk.m_end && file[endLine] != '\n')
 			endLine++;
-		}
 
-        const char* ptr = &file[i];
-        const char* end = &file[endLine];
+		const char* ptr = &file[i];
+		const char* end = &file[endLine];
 
-        // Skip empty lines or non-face lines
 		if (ptr >= end || *ptr != 'f')
 		{
 			i = ++endLine;
 			continue;
 		}
+		ptr++; // skip 'f'
 
-        ptr++; // skip 'f'
+		// --- Per-face state ---
+		int firstIdx = -1;
+		int prevIdx = -1;
+		int currIdx = -1;
+		int vertexCount = 0;
 
-        for (int vi = 0; vi < 3; ++vi)
-        {
-			int vIdx = 0;
-			int vtIdx = 0;
-			int vnIdx = 0;
+		while (ptr < end && *ptr != '\n' && *ptr != '\r')
+		{
+			// skip spaces
+			while (ptr < end && *ptr == ' ')
+				++ptr;
+			if (ptr >= end) break;
+
+			int vIdx = 0, vtIdx = 0, vnIdx = 0;
 
 			// v
-			while (ptr < end && *ptr == ' ')
-			{
-				++ptr;
-			}
 			const char* start = ptr;
-			while (ptr < end && *ptr != '/' && *ptr != ' ')
-			{
+			while (ptr < end && *ptr != '/' && *ptr != ' ' && *ptr != '\n' && *ptr != '\r')
 				++ptr;
-			}
-			if (ptr > start) vIdx = parseInt(start, ptr);
+			if (ptr > start)
+				vIdx = parseInt(start, ptr);
 
 			// vt
 			if (ptr < end && *ptr == '/')
-			{
 				++ptr;
-			}
 			start = ptr;
-			while (ptr < end && *ptr != '/' && *ptr != ' ')
-			{
+			while (ptr < end && *ptr != '/' && *ptr != ' ' && *ptr != '\n' && *ptr != '\r')
 				++ptr;
-			}
 			if (ptr > start)
 				vtIdx = parseInt(start, ptr);
 
 			// vn
 			if (ptr < end && *ptr == '/')
-			{
 				++ptr;
-			}
 			start = ptr;
-			while (ptr < end && *ptr != ' ')
-			{
+			while (ptr < end && *ptr != ' ' && *ptr != '\n' && *ptr != '\r')
 				++ptr;
-			}
 			if (ptr > start)
 				vnIdx = parseInt(start, ptr);
 
-            vIdx	= vIdx < 0 ?  (int)result.m_positions.size() + vIdx : vIdx - 1;
-            vtIdx	= vtIdx < 0 ? (int)result.m_texCoords.size() + vtIdx : vtIdx - 1;
-            vnIdx	= vnIdx < 0 ? (int)result.m_normals.size() + vnIdx : vnIdx - 1;
+			// convert to 0-based indices
+			vIdx = vIdx < 0 ? (int)result.m_positions.size() + vIdx : vIdx - 1;
+			vtIdx = vtIdx < 0 ? (int)result.m_texCoords.size() + vtIdx : vtIdx - 1;
+			vnIdx = vnIdx < 0 ? (int)result.m_normals.size() + vnIdx : vnIdx - 1;
 
-            if (vIdx >= 0)	position	= result.m_positions[vIdx];
-            if (vtIdx >= 0) texCoord	= result.m_texCoords[vtIdx];
-            if (vnIdx >= 0) normal		= result.m_normals[vnIdx];
+			if (vIdx >= 0) position = result.m_positions[vIdx];
+			if (vtIdx >= 0) texCoord = result.m_texCoords[vtIdx];
+			if (vnIdx >= 0) normal = result.m_normals[vnIdx];
 
-            mesh.push_back(Vertex(position, normal, texCoord));
-            indices.push_back(mesh.size() - 1);
-            
-        }
-		
+			mesh.push_back(Vertex(position, normal, texCoord));
+			currIdx = static_cast<int>(mesh.size() - 1);
+
+			// triangulate on the fly
+			if (vertexCount == 0)
+			{
+				firstIdx = currIdx;
+			}
+			else if (vertexCount == 1)
+			{
+				prevIdx = currIdx;
+			}
+			else
+			{
+				indices.push_back(firstIdx);
+				indices.push_back(prevIdx);
+				indices.push_back(currIdx);
+				prevIdx = currIdx;
+			}
+			vertexCount++;
+		}
+
 		i = ++endLine;
 	}
+
 	promResult->set_value({ mesh, indices });
 }
 

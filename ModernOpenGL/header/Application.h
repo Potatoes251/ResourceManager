@@ -24,6 +24,7 @@ struct AppContext
 	bool mesh1Loaded = false;
 	bool mesh2Loaded = false;
 	bool mesh3Loaded = false;
+	bool mesh4Loaded = false;
 };
 
 class Application

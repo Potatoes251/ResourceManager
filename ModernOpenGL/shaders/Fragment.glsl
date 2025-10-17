@@ -187,4 +187,6 @@ void main()
     //FragColor = vec4(clamp(texColor.rgb + result.rgb, 0.0, 1.0), texColor.a);
 	
 	FragColor = vec4(clamp(result.rgb, 0.0, 1.0), texColor.a);
+
+	//FragColor = vec4((Normal), 1.0);
 }

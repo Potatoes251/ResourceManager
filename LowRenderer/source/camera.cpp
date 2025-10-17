@@ -65,34 +65,34 @@ void Camera::update(GLFWwindow* window)
 {
     const float moveSpeed = 0.01f;
     const float zoomSpeed = 0.01f;
-
-    // Forward (O)
-    if (glfwGetKey(window, GLFW_KEY_O) == GLFW_PRESS)
+    // (Qwerty/Azerty)
+    // Forward (W/Z)
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
     {
         m_position += m_forward * zoomSpeed;
     }
-    // Backward (U)
-    if (glfwGetKey(window, GLFW_KEY_U) == GLFW_PRESS)
+    // Backward (S)
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
     {
         m_position -= m_forward * zoomSpeed;
     }
-    // Left (J)
-    if (glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS)
+    // Left (A/Q)
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
     {
         m_position -= m_right * moveSpeed;
     }
-    // Right (L)
-    if (glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS)
+    // Right (D)
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
     {
         m_position += m_right * moveSpeed;
     }
-    // Up (K)
-    if (glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS)
+    // Up (E)
+    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
     {
         m_position -= m_up * moveSpeed;
     }
-    // Down (I)
-    if (glfwGetKey(window, GLFW_KEY_I) == GLFW_PRESS)
+    // Down (Q/A)
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
     {
         m_position += m_up * moveSpeed;
     }
@@ -117,8 +117,8 @@ void Camera::processMouseMovement(double xpos, double ypos)
     xoffset *= sensitivity;
     yoffset *= sensitivity;
 
-    m_yaw -= xoffset;
-    m_pitch -= yoffset;
+    m_yaw += xoffset;
+    m_pitch += yoffset;
 
     const float pitchLimit = M_PI / 2.0f - 0.01f;
     if (m_pitch > pitchLimit) m_pitch = pitchLimit;
