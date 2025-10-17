@@ -56,9 +56,8 @@ struct FaceIndex
 inline float		fastPow10(int exp);
 inline float		parseFloat(const char*& ptr, const char* end);
 inline int			parseInt(const char* ptr, const char* end);
-LibMath::Vector3	parseVec3(const char* ptr, const char* end);
-LibMath::Vector2	parseVec2(const char* ptr, const char* end);
-FaceIndex			parseIndices(const char* ptr, const char* end, VerticesResult& result);
+inline LibMath::Vector3	parseVec3(const char* ptr, const char* end);
+inline LibMath::Vector2	parseVec2(const char* ptr, const char* end);
 
 class Model : public IResource
 {

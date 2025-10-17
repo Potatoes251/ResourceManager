@@ -18,9 +18,9 @@ void	initShader(Shader& shader)
 	shader.use();
 }
 
-void	onMesh1Loaded(Model* model, Graph* graph, ResourceManager& rm, Application* app)
+void	onMesh1Loaded(Model* model, Graph* graph, ResourceManager* rm, Application* app)
 {
-	app->postToMain([=, &rm]() {
+	app->postToMain([=]() {
 		model->uploadToGPU();
 
 		Mesh mesh(model,
@@ -31,19 +31,19 @@ void	onMesh1Loaded(Model* model, Graph* graph, ResourceManager& rm, Application*
 				LibMath::Vector3(1.f, 1.f, 1.f)));
 
 		Graph::SceneNode* node = graph->addChild(nullptr, mesh);
-		node->setTexture(rm.Get<Texture>("container.jpg"));
+		node->setTexture(rm->Get<Texture>("container.jpg"));
 		});
 }
 
-void	loadMesh1(ResourceManager& rm, Graph* graph, Application* app)
+void	loadMesh1(ResourceManager* rm, Graph* graph, Application* app)
 {
 	std::string file = "diablo3_pose/diablo3_pose.obj";
-	rm.createAsync<Model>(file, onMesh1Loaded, graph, std::ref(rm), app);
+	rm->createAsync<Model>(file, onMesh1Loaded, graph, rm, app);
 }
 
-void	copyMesh1(ResourceManager& rm, Graph* graph)
+void	copyMesh1(ResourceManager* rm, Graph* graph)
 {
-	Model* model = rm.Get<Model>("diablo3_pose/diablo3_pose.obj");
+	Model* model = rm->Get<Model>("diablo3_pose/diablo3_pose.obj");
 
 	if (model == nullptr) return;
 
@@ -56,12 +56,12 @@ void	copyMesh1(ResourceManager& rm, Graph* graph)
 
 	Graph::SceneNode* node = graph->addChild(nullptr, mesh);
 
-	node->setTexture(rm.Get<Texture>("container.png"));
+	node->setTexture(rm->Get<Texture>("container.png"));
 }
 
-void	onMesh2Loaded(Model* model, Graph* graph, ResourceManager& rm, Application* app)
+void	onMesh2Loaded(Model* model, Graph* graph, ResourceManager* rm, Application* app)
 {
-	app->postToMain([=, &rm]() {
+	app->postToMain([=]() {
 		model->uploadToGPU();
 
 		Mesh mesh(model,
@@ -72,19 +72,19 @@ void	onMesh2Loaded(Model* model, Graph* graph, ResourceManager& rm, Application*
 				LibMath::Vector3(.5f, .5f, .5f)));
 
 		Graph::SceneNode* node = graph->addChild(nullptr, mesh);
-		node->setTexture(rm.Get<Texture>("Potatoes.png"));
+		node->setTexture(rm->Get<Texture>("Potatoes.png"));
 		});
 }
 
-void	loadMesh2(ResourceManager& rm, Graph* graph, Application* app)
+void	loadMesh2(ResourceManager* rm, Graph* graph, Application* app)
 {
 	std::string file = "locomotive.obj";
-	rm.createAsync<Model>(file, onMesh2Loaded, graph, std::ref(rm), app);
+	rm->createAsync<Model>(file, onMesh2Loaded, graph, rm, app);
 }
 
-void	copyMesh2(ResourceManager& rm, Graph* graph)
+void	copyMesh2(ResourceManager* rm, Graph* graph)
 {
-	Model* model = rm.Get<Model>("locomotive.obj");
+	Model* model = rm->Get<Model>("locomotive.obj");
 
 	if (model == nullptr) return;
 
@@ -97,12 +97,12 @@ void	copyMesh2(ResourceManager& rm, Graph* graph)
 
 	Graph::SceneNode* node = graph->addChild(nullptr, mesh);
 
-	node->setTexture(rm.Get<Texture>("Potatoes.png"));
+	node->setTexture(rm->Get<Texture>("Potatoes.png"));
 }
 
-void	onMesh3Loaded(Model* model, Graph* graph, ResourceManager& rm, Application* app)
+void	onMesh3Loaded(Model* model, Graph* graph, ResourceManager* rm, Application* app)
 {
-	app->postToMain([=, &rm]() {
+	app->postToMain([=]() {
 		model->uploadToGPU();
 
 		Mesh mesh(model,
@@ -113,19 +113,19 @@ void	onMesh3Loaded(Model* model, Graph* graph, ResourceManager& rm, Application*
 				LibMath::Vector3(2.f, 2.f, 2.f)));
 
 		Graph::SceneNode* node = graph->addChild(nullptr, mesh);
-		node->setTexture(rm.Get<Texture>("Potatoes.jpg"));
+		node->setTexture(rm->Get<Texture>("Potatoes.jpg"));
 		});
 }
 
-void	loadMesh3(ResourceManager& rm, Graph* graph, Application* app)
+void	loadMesh3(ResourceManager* rm, Graph* graph, Application* app)
 {
 	std::string file = "dragon.obj";
-	rm.createAsync<Model>(file, onMesh3Loaded, graph, std::ref(rm), app);
+	rm->createAsync<Model>(file, onMesh3Loaded, graph, rm, app);
 }
 
-void	copyMesh3(ResourceManager& rm, Graph* graph)
+void	copyMesh3(ResourceManager* rm, Graph* graph)
 {
-	Model* model = rm.Get<Model>("dragon.obj");
+	Model* model = rm->Get<Model>("dragon.obj");
 
 	if (model == nullptr) return;
 
@@ -138,12 +138,12 @@ void	copyMesh3(ResourceManager& rm, Graph* graph)
 
 	Graph::SceneNode* node = graph->addChild(nullptr, mesh);
 
-	node->setTexture(rm.Get<Texture>("Potatoes.png"));
+	node->setTexture(rm->Get<Texture>("Potatoes.png"));
 }
 
-void	onMesh4Loaded(Model* model, Graph* graph, ResourceManager& rm, Application* app)
+void	onMesh4Loaded(Model* model, Graph* graph, ResourceManager* rm, Application* app)
 {
-	app->postToMain([=, &rm]() {
+	app->postToMain([=]() {
 		model->uploadToGPU();
 
 		Mesh mesh(model,
@@ -154,19 +154,19 @@ void	onMesh4Loaded(Model* model, Graph* graph, ResourceManager& rm, Application*
 				LibMath::Vector3(2.f, 2.f, 2.f)));
 
 		Graph::SceneNode* node = graph->addChild(nullptr, mesh);
-		node->setTexture(rm.Get<Texture>("container.jpg"));
+		node->setTexture(rm->Get<Texture>("container.jpg"));
 		});
 }
 
-void	loadMesh4(ResourceManager& rm, Graph* graph, Application* app)
+void	loadMesh4(ResourceManager* rm, Graph* graph, Application* app)
 {
 	std::string file = "armadillo.obj";
-	rm.createAsync<Model>(file, onMesh4Loaded, graph, std::ref(rm), app);
+	rm->createAsync<Model>(file, onMesh4Loaded, graph, rm, app);
 }
 
-void	copyMesh4(ResourceManager& rm, Graph* graph)
+void	copyMesh4(ResourceManager* rm, Graph* graph)
 {
-	Model* model = rm.Get<Model>("armadillo.obj");
+	Model* model = rm->Get<Model>("armadillo.obj");
 
 	if (model == nullptr) return;
 
@@ -179,7 +179,7 @@ void	copyMesh4(ResourceManager& rm, Graph* graph)
 
 	Graph::SceneNode* node = graph->addChild(nullptr, mesh);
 
-	node->setTexture(rm.Get<Texture>("container.png"));
+	node->setTexture(rm->Get<Texture>("container.png"));
 }
 
 void	initLights(Shader& shader, Camera& camera)
@@ -217,48 +217,48 @@ void	processInput(GLFWwindow* window, int key, int scancode, int action, int mod
 	{
 		if (ctx->mesh1Loaded)
 		{
-			copyMesh1(*(ctx->m_rm), ctx->m_graph);
+			copyMesh1(ctx->m_rm, ctx->m_graph);
 		}
 		else
 		{
 			ctx->mesh1Loaded = true;
-			loadMesh1(*(ctx->m_rm), ctx->m_graph, ctx->m_app);
+			loadMesh1(ctx->m_rm, ctx->m_graph, ctx->m_app);
 		}
 	}
 	else if (key == GLFW_KEY_2)
 	{
 		if (ctx->mesh2Loaded)
 		{
-			copyMesh2(*(ctx->m_rm), ctx->m_graph);
+			copyMesh2(ctx->m_rm, ctx->m_graph);
 		}
 		else
 		{
 			ctx->mesh2Loaded = true;
-			loadMesh2(*(ctx->m_rm), ctx->m_graph, ctx->m_app);
+			loadMesh2(ctx->m_rm, ctx->m_graph, ctx->m_app);
 		}
 	}
 	else if (key == GLFW_KEY_3)
 	{
 		if (ctx->mesh3Loaded)
 		{
-			copyMesh3(*(ctx->m_rm), ctx->m_graph);
+			copyMesh3(ctx->m_rm, ctx->m_graph);
 		}
 		else
 		{
 			ctx->mesh3Loaded = true;
-			loadMesh3(*(ctx->m_rm), ctx->m_graph, ctx->m_app);
+			loadMesh3(ctx->m_rm, ctx->m_graph, ctx->m_app);
 		}
 	}
 	else if (key == GLFW_KEY_4)
 	{
 		if (ctx->mesh4Loaded)
 		{
-			copyMesh4(*(ctx->m_rm), ctx->m_graph);
+			copyMesh4(ctx->m_rm, ctx->m_graph);
 		}
 		else
 		{
 			ctx->mesh4Loaded = true;
-			loadMesh4(*(ctx->m_rm), ctx->m_graph, ctx->m_app);
+			loadMesh4(ctx->m_rm, ctx->m_graph, ctx->m_app);
 		}
 	}
 }
@@ -294,7 +294,7 @@ int		main()
 {
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 	_CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG);
-	//_CrtSetBreakAlloc(1217827);
+
 	bool reset = true;
 	bool multithread = true;
 

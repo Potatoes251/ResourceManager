@@ -37,12 +37,6 @@ void Camera::updateVector()
     m_forward = LibMath::Vector3{ sinYaw * cosPitch, sinPitch, cosPitch * cosYaw };
     m_forward.normalize();
 
-    //m_forward = m_position - LibMath::Vector3::zero();
-    //m_forward.normalize();
-
-    //m_right = LibMath::Vector3::up().cross(m_forward);
-    //m_right.normalize();
-
     // Up vector (Y-axis)
     m_up = m_forward.cross(m_right);
     m_up.normalize();
@@ -64,17 +58,16 @@ void Camera::updateView()   // lookat matrix
 void Camera::update(GLFWwindow* window)
 {
     const float moveSpeed = 0.01f;
-    const float zoomSpeed = 0.01f;
     // (Qwerty/Azerty)
     // Forward (W/Z)
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
     {
-        m_position += m_forward * zoomSpeed;
+        m_position += m_forward * moveSpeed;
     }
     // Backward (S)
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
     {
-        m_position -= m_forward * zoomSpeed;
+        m_position -= m_forward * moveSpeed;
     }
     // Left (A/Q)
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)

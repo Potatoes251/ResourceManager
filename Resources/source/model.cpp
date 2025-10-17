@@ -140,52 +140,11 @@ LibMath::Vector2	parseVec2(const char* ptr, const char* end)
 	return position;
 }
 
-inline FaceIndex	parseVertexIndices(const char*& ptr, const char* end)
-{
-	int vIdx = 0, vtIdx = 0, vnIdx = 0;
-
-	// Skip spaces
-	while (ptr < end && *ptr == ' ')
-		++ptr;
-
-	// --- v ---
-	const char* start = ptr;
-	while (ptr < end && *ptr != '/' && *ptr != ' ' && *ptr != '\n' && *ptr != '\r')
-		++ptr;
-	if (ptr > start)
-		vIdx = parseInt(start, ptr);
-
-	// --- vt ---
-	if (ptr < end && *ptr == '/')
-		++ptr;
-	start = ptr;
-	while (ptr < end && *ptr != '/' && *ptr != ' ' && *ptr != '\n' && *ptr != '\r')
-		++ptr;
-	if (ptr > start)
-		vtIdx = parseInt(start, ptr);
-
-	// --- vn ---
-	if (ptr < end && *ptr == '/')
-		++ptr;
-	start = ptr;
-	while (ptr < end && *ptr != ' ' && *ptr != '\n' && *ptr != '\r')
-		++ptr;
-	if (ptr > start)
-		vnIdx = parseInt(start, ptr);
-
-	return { vIdx, vtIdx, vnIdx };
-}
-
 void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 {
-#ifdef TEST_TIME
-	auto start = std::chrono::high_resolution_clock::now();
-#endif
-	// open the file and set cursor at the end
-	std::ifstream file("../../assets/meshes/" + id, std::ios::binary | std::ios::ate);
+	std::ifstream file("../../assets/meshes/" + id, std::ios::binary | std::ios::ate); // set cursor at the end
 	if (!file.is_open())
 	{
-		// handle file not found
 		std::cerr << "Failed to open file" << std::endl;
 		return;
 	}
@@ -195,16 +154,6 @@ void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 	std::vector<char> buffer(fileSize);
 	file.read(buffer.data(), fileSize);
 	file.close();
-
-	if (buffer[buffer.size() - 1] != '\n')
-	{
-		buffer.push_back('\n');
-	}
-#ifdef TEST_TIME
-	auto end = std::chrono::high_resolution_clock::now();
-	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	printf("Open %lldms\n", elapsed.count());
-#endif
 
 	size_t nbChunk = buffer.size() / MIN_CHUNK_SIZE_BYTE;
 	nbChunk = std::max(std::min((int)nbChunk, MAX_THREAD), 1);
@@ -222,40 +171,21 @@ void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 		pool.enqueue(this, &Model::parseChunkVertices, std::ref(buffer), chunks[i], &(promResultMesh[i]));
 	}
 #ifdef TEST_TIME
-	start = std::chrono::high_resolution_clock::now();
+	auto start = std::chrono::high_resolution_clock::now();
 #endif
-	int nbPos = 0;
-	int nbTex = 0;
-	int nbNor = 0;
-
-	std::vector<VerticesResult> futures;
-
+	VerticesResult global_result;
 	for (auto& f : futureResultMesh)
 	{
 		VerticesResult result = f.get();
-		futures.push_back(result);
-		// Merge result into your mesh/indices
-		nbPos += result.m_positions.size();
-		nbTex += result.m_texCoords.size();
-		nbNor += result.m_normals.size();
-	}
 
-	VerticesResult global_result;
-	global_result.m_positions.reserve(nbPos);
-	global_result.m_texCoords.reserve(nbTex);
-	global_result.m_normals.reserve(nbNor);
-
-	for (auto& f : futures)
-	{
-		// Merge result into your mesh/indices
-		global_result.m_positions.insert(global_result.m_positions.end(), f.m_positions.begin(), f.m_positions.end());
-		global_result.m_texCoords.insert(global_result.m_texCoords.end(), f.m_texCoords.begin(), f.m_texCoords.end());
-		global_result.m_normals.insert(global_result.m_normals.end(), f.m_normals.begin(), f.m_normals.end());
+		global_result.m_positions.insert(global_result.m_positions.end(), result.m_positions.begin(), result.m_positions.end());
+		global_result.m_texCoords.insert(global_result.m_texCoords.end(), result.m_texCoords.begin(), result.m_texCoords.end());
+		global_result.m_normals.insert(global_result.m_normals.end(), result.m_normals.begin(), result.m_normals.end());
 	}
 #ifdef TEST_TIME
-	end = std::chrono::high_resolution_clock::now();
-	elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	printf("Merge1 : %lldms\n", elapsed.count());
+	auto end = std::chrono::high_resolution_clock::now();
+	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+	printf("v, vt, vn reading : %lldms\n", elapsed.count());
 	start = std::chrono::high_resolution_clock::now();
 #endif
 	std::vector<std::promise<FacesResult>>		promResultIndex(nbChunk);
@@ -266,50 +196,23 @@ void Model::parserMultithread(std::string const& id, ThreadPool& pool)
 		futureResultIndex[i] = promResultIndex[i].get_future();
 		pool.enqueue(this, &Model::parseChunkFaces, std::ref(buffer), chunks[i], std::ref(global_result), &(promResultIndex[i]));
 	}
-#ifdef TEST_TIME
-	end = std::chrono::high_resolution_clock::now();
-	elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	printf("Faces dispatch : %lldms\n", elapsed.count());
-	start = std::chrono::high_resolution_clock::now();
-#endif
-	std::vector<FacesResult> futuresResult;
-
-	int meshSize = 0;
-	int indexSize = 0;
-
 	for (auto& f : futureResultIndex)
 	{
 		FacesResult result = f.get();
-		futuresResult.push_back(result);
-		// Merge result into your mesh/indices
-		meshSize += result.m_mesh.size();
-		indexSize += result.m_indices.size();
+
+		size_t baseIndex = m_mesh.size();  // offset indices by the number of indices already there
+
+		for (uint32_t& idx : result.m_indices)
+		{
+			idx += static_cast<uint32_t>(baseIndex);
+		}
+		m_indices.insert(m_indices.end(), result.m_indices.begin(), result.m_indices.end());
+		m_mesh.insert(m_mesh.end(), result.m_mesh.begin(), result.m_mesh.end());
 	}
 #ifdef TEST_TIME
 	end = std::chrono::high_resolution_clock::now();
 	elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 	printf("Face parsing : %lldms\n", elapsed.count());
-	start = std::chrono::high_resolution_clock::now();
-#endif
-	m_indices.reserve(indexSize);
-	m_mesh.reserve(meshSize);
-
-	for (auto& f : futuresResult)
-	{
-		size_t baseIndex = m_mesh.size();  // offset = current vertex count
-		// adjust indices from this chunk
-		for (uint32_t& idx : f.m_indices)
-		{
-			idx += static_cast<uint32_t>(baseIndex);
-		}
-		// Merge result into your mesh/indices
-		m_indices.insert(m_indices.end(), f.m_indices.begin(), f.m_indices.end());
-		m_mesh.insert(m_mesh.end(), f.m_mesh.begin(), f.m_mesh.end());
-	}
-#ifdef TEST_TIME
-	end = std::chrono::high_resolution_clock::now();
-	elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	printf("Merge2 : %lldms\n", elapsed.count());
 #endif
 }
 
@@ -341,19 +244,18 @@ std::vector<Chunk> Model::splitFileByLines(const std::vector<char>& buffer, size
 
 void	Model::parseChunkVertices(std::vector<char>& file, Chunk chunk, std::promise<VerticesResult>* promResult)
 {
-	std::vector<LibMath::Vector3> positions, normals;
-	std::vector<LibMath::Vector2> texCoords;
+	std::vector<LibMath::Vector3>	positions, normals;
+	std::vector<LibMath::Vector2>	texCoords;
 
 	size_t	i = chunk.m_start;
 
 	while (i < chunk.m_end)
 	{
-		size_t endLine = i;
+		size_t	endLine = i;
 		while (endLine < chunk.m_end && file[endLine] != '\n')
 		{
 			endLine++;
 		}
-
 		std::string_view	line(&file[i], endLine - i);
 
 		// Skip empty lines
@@ -544,7 +446,6 @@ void	Model::parserSinglethread(std::string const& id)
 			i = ++endLine;
 			continue;
 		}
-
 		char first = line[0];
 		char second = line.size() > 1 ? line[1] : '\0';
 		const char* ptr = line.data();
@@ -705,8 +606,7 @@ Model::ElementBuffer::ElementBuffer(std::vector<uint32_t> indices)
 {
 	glGenBuffers(1, &m_EBO);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(uint32_t),
-		indices.data(), GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(uint32_t), indices.data(), GL_STATIC_DRAW);
 }
 
 GLuint Model::ElementBuffer::getEBO() const
