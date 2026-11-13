@@ -78,13 +78,13 @@ void	onMesh2Loaded(Model* model, Graph* graph, ResourceManager* rm, Application*
 
 void	loadMesh2(ResourceManager* rm, Graph* graph, Application* app)
 {
-	std::string file = "locomotive.obj";
+	std::string file = "tyra.obj";
 	rm->createAsync<Model>(file, onMesh2Loaded, graph, rm, app);
 }
 
 void	copyMesh2(ResourceManager* rm, Graph* graph)
 {
-	Model* model = rm->Get<Model>("locomotive.obj");
+	Model* model = rm->Get<Model>("tyra.obj");
 
 	if (model == nullptr) return;
 
